@@ -1,0 +1,17 @@
+{
+    "name": "lsn/wms",
+    "description": "Warehouse Management System LSN",
+    "type": "project",
+    "require": {
+        "php": ">=8.0",
+        "phpoffice/phpspreadsheet": "^2.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "WMS\\": "src/"
+        }
+    },
+    "config": {
+        "optimize-autoloader": true
+    }
+}
