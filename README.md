@@ -85,6 +85,9 @@ wms/
 │   └── helpers.php        # Helper functions
 ├── public/
 │   ├── index.php          # Entry point (set ini sebagai web root)
+│   ├── assets/
+│   │   ├── css/style.css
+│   │   └── js/app.js
 │   └── api/
 │       ├── auth.php
 │       ├── dashboard.php
