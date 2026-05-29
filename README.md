@@ -100,9 +100,6 @@ wms/
 │       ├── softcase_monitoring.php
 │       ├── users.php
 │       └── export.php
-├── assets/
-│   ├── css/style.css
-│   └── js/app.js
 └── vendor/                # (setelah composer install)
 ```
 
