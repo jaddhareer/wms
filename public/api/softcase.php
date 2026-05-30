@@ -66,27 +66,30 @@ try {
 
     $softKg = calcKg($src['product_type'] ?? '', $qty_soft);
 
-    // Insert transaction
-    $stmt = $pdo->prepare("
-        INSERT INTO transactions
-            (transaction_id, movement_type, batch, quantity, uom, quantity_kg,
-             source_location, destination_location, user_id, remarks, created_at)
-        VALUES (?, 'softcase', ?, ?, 'CTN', ?, ?, 'SC AREA', ?, ?, NOW())
-    ");
-    $stmt->execute([
-        $txn_id, $batch, $qty_soft_ctn, $softKg, $source_bin, $user['id'],
-        $remarks
-    ]);
+    if($softKg > 0) {
+        // Insert transaction
+        $stmt = $pdo->prepare("
+            INSERT INTO transactions
+                (transaction_id, movement_type, batch, quantity, uom, quantity_kg,
+                source_location, destination_location, user_id, remarks, created_at)
+            VALUES (?, 'softcase', ?, ?, 'CTN', ?, ?, 'SC AREA', ?, ?, NOW())
+        ");
+        $stmt->execute([
+            $txn_id, $batch, $qty_soft_ctn, $softKg, $source_bin, $user['id'],
+            $remarks
+        ]);
 
-    // Decrement source bin
-    $decrStmt = $pdo->prepare("
-        UPDATE bin_locations
-        SET quantity    = quantity - ?,
-            quantity_kg = ROUND(quantity_kg - ?, 2),
-            updated_at  = NOW()
-        WHERE batch = ? AND pallet_number = ? AND bin_location = ?
-    ");
-    $decrStmt->execute([$qty_soft_ctn, $softKg, $batch, $pallet_number, $source_bin]);
+        // Decrement source bin
+        $decrStmt = $pdo->prepare("
+            UPDATE bin_locations
+            SET quantity    = quantity - ?,
+                quantity_kg = ROUND(quantity_kg - ?, 2),
+                updated_at  = NOW()
+            WHERE batch = ? AND pallet_number = ? AND bin_location = ?
+        ");
+        $decrStmt->execute([$qty_soft_ctn, $softKg, $batch, $pallet_number, $source_bin]);
+    }
+
 
     // Increment SC AREA bin
     $incrStmt = $pdo->prepare("
