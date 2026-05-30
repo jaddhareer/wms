@@ -50,6 +50,7 @@ CREATE TABLE IF NOT EXISTS bin_locations (
     quantity       INT         DEFAULT 0,
     quantity_kg    DECIMAL(10,2) DEFAULT 0,
     uom            VARCHAR(10),
+    product_type   VARCHAR(25) NOT NULL,
     bin_location   VARCHAR(25) NOT NULL,
     location_type  VARCHAR(25),
     updated_at     DATETIME    DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
