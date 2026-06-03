@@ -1487,7 +1487,7 @@ async function api(endpoint, method = 'GET', body = null, withCsrf = true) {
 
 function autoSelect() {
   qAll('.field-input[type="text"], .field-input[type="number"], .field-input[type="password"], .filter-input').forEach(el => {
-    el.addEventListener('focus', function() { this.select(); });
+    el.addEventListener('focus', function() { this.select(); this.value = this.value.toUpperCase() });
   });
 }
 
