@@ -637,7 +637,7 @@ function outbound() {
           <div class="form-grid">
             <div class="field-group">
               <label class="field-label">Destination</label>
-              <select class="field-select" id="obDestList">
+              <select class="field-select" id="obDest">
                 <option value="">--Tujuan--</option>
                 <option value="Customer Lokal">Customer Lokal</option>
                 <option value="Customer Export">Customer Export</option>
@@ -717,7 +717,7 @@ function outbound() {
     closeModal();
   };
 
-  q('#obBatch')?.addEventListener('change', obAutoFill);
+  q('#obBatch')?.addEventListener('input', obAutoFill);
 
   q('#obClearBtn').addEventListener('click', () => { state.outboundRows = []; obRenderTable(); });
   q('#obSubmitBtn').addEventListener('click', obSubmit);
@@ -725,7 +725,7 @@ function outbound() {
 }
 
 function obAddRow() {
-  const dest  = q('#obDest').value.trim();
+  const dest  = q('#obDest').value;
   if (!dest) { toast('Isi Destination terlebih dahulu', 'warning'); return; }
 
   const batch  = q('#obBatch').value.trim();
