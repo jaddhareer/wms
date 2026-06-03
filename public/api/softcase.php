@@ -112,7 +112,7 @@ try {
             uom_checked = 'CTN',
             qty_soft    = qty_soft + ?,
             uom_soft    = 'CTN',
-            remarks     = ?
+            remarks     = ?,
             checked_at  = NOW()
     ");
     $scStmt->execute([$batch, $pallet_number, $qty_checked_ctn, $qty_soft_ctn, $remarks, $qty_soft_ctn, $remarks]);

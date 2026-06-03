@@ -826,6 +826,38 @@ function softcase() {
     </div>
   `);
   autoSelect();
+
+  async function scAutoFill() {
+  const batch  = q('#scBatch')?.value.trim();
+  const data = await api(`bin_lookup.php?batch=${encodeURIComponent(batch)}`);
+  if (!data.success || !data.data.length) return;
+  const bins = data.data;
+    if (bins.length === 1) {
+      q('#scPallet').value = bins[0].pallet_number;
+      q('#scQtyChecked').value = bins[0].quantity;
+    } else {
+      // Multiple bins: tampilkan pilihan
+      openModal(`Pilih No. Pallet & Bin — ${batch}`, `
+        <div style="display:flex;flex-direction:column;gap:8px">
+          ${bins.map(b => `
+            <button class="btn btn-secondary" style="justify-content:flex-start;font-family:var(--font-mono)"
+              onclick="scFillQty('${b.pallet_number}',${b.quantity},event)">
+              ${b.pallet_number} - ${b.quantity} ${b.uom}
+            </button>`).join('')}
+        </div>
+      `);
+    }
+  }
+  window.scFillQty = (pallet, qty, e) => {
+    e.preventDefault();
+    q('#scPallet').value = pallet;
+    q('#scQtyChecked').value = qty;
+    closeModal();
+  };
+
+  q('#scBatch')?.addEventListener('input', scAutoFill);  
+
+
   q('#scSubmitBtn').addEventListener('click', scSubmit);
   q('#scResetBtn').addEventListener('click', () => {
     ['scBatch','scPallet','scQtyChecked','scQtySoft','scRemarks'].forEach(id => { const el=q(`#${id}`); if(el) el.value=''; });
@@ -958,7 +990,7 @@ function moving() {
     closeModal();
   };
 
-  q('#mvBatch')?.addEventListener('change', mvAutoFill);
+  q('#mvBatch')?.addEventListener('input', mvAutoFill);
 
   q('#mvResetBtn').addEventListener('click', () => {
     ['mvSrc','mvDst','mvBatch','mvPallet','mvQty','mvRemarks'].forEach(id => { const el=q(`#${id}`); if(el) el.value=''; });
