@@ -31,7 +31,7 @@ $occChiller = $capChiller > 0 ? round(($palletChiller / $capChiller) * 100, 1) :
 
 // ─── Recent inbound (3 days) ────────────────────────────────
 $recentIn = $pdo->query("
-    SELECT t.transaction_id, t.batch,
+    SELECT t.batch,
            SUM(t.quantity) AS quantity, t.uom,
            SUM(t.quantity_kg) AS quantity_kg,
            t.source_location, t.destination_location,
@@ -40,7 +40,7 @@ $recentIn = $pdo->query("
     LEFT JOIN users u ON t.user_id = u.id
     WHERE t.movement_type = 'inbound'
       AND t.created_at >= DATE_SUB(NOW(), INTERVAL 3 DAY)
-    GROUP BY t.transaction_id, t.batch, t.uom,
+    GROUP BY t.batch, t.uom,
              t.source_location, t.destination_location, u.username
     ORDER BY MIN(t.created_at) DESC
     LIMIT 20
@@ -48,7 +48,7 @@ $recentIn = $pdo->query("
 
 // ─── Recent outbound (3 days) ───────────────────────────────
 $recentOut = $pdo->query("
-    SELECT t.transaction_id, t.batch,
+    SELECT t.batch,
            SUM(t.quantity) AS quantity, t.uom,
            SUM(t.quantity_kg) AS quantity_kg,
            t.source_location, t.destination_location,
@@ -57,7 +57,7 @@ $recentOut = $pdo->query("
     LEFT JOIN users u ON t.user_id = u.id
     WHERE t.movement_type = 'outbound'
       AND t.created_at >= DATE_SUB(NOW(), INTERVAL 3 DAY)
-    GROUP BY t.transaction_id, t.batch, t.uom,
+    GROUP BY t.batch, t.uom,
              t.source_location, t.destination_location, u.username
     ORDER BY MIN(t.created_at) DESC
     LIMIT 20
