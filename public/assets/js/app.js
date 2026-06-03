@@ -642,6 +642,8 @@ function outbound() {
                 <option value="Customer Lokal">Customer Lokal</option>
                 <option value="Customer Export">Customer Export</option>
                 <option value="WH External">WH External</option>
+                <option value="Production">Production</option>
+                <option value="Other">Tulis di remark</option>
               </select> 
             </div>
           </div>
