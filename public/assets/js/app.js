@@ -162,6 +162,9 @@ function initSidebar() {
     sidebar.classList.remove('open');
     overlay.style.display = 'none';
   });
+  sidebar.addEventListener('click', () => {
+    overlay.style.display = 'none';
+  })
 }
 
 function initNavigation() {
@@ -443,8 +446,23 @@ function inbound() {
         <div class="panel-header"><div class="panel-title">Form Inbound</div></div>
         <div class="panel-body">
           <div class="form-grid">
-            <div class="field-group"><label class="field-label">Inbound From *</label><input id="ibFrom" class="field-input" placeholder="Input / Klik 2x"></div>
-            <div class="field-group"><label class="field-label">Storage Location *</label><input id="ibStorage" class="field-input" placeholder="Klik 2x"></div>
+            <div class="field-group">
+              <label class="field-label">Inbound From *</label>
+              <input id="ibFrom" class="field-input" list="ibFromList" placeholder="Ketik atau pilih..." autocomplete="off">
+              <datalist id="ibFromList">
+                <option value="Production">
+                <option value="WH External">
+                <option value="Customer Reject">
+              </datalist>
+            </div>
+            <div class="field-group">
+              <label class="field-label">Storage Location *</label>
+              <input id="ibStorage" class="field-input" list="ibToList" placeholder="Ketik atau pilih..." autocomplete="off">
+              <datalist id="ibToList">
+                <option value="LSN Ambient">
+                <option value="LSN Chiller">
+              </datalist>
+            </div>
             <div class="field-group"><label class="field-label">Product Type *</label>
               <select id="ibProductType" class="field-select"><option value="">-- Pilih --</option>${PRODUCT_TYPES.map(p=>`<option>${p}</option>`).join('')}</select>
             </div>
@@ -477,7 +495,7 @@ function inbound() {
           <div id="ibSummary" class="temp-summary hidden" style="margin:12px"></div>
           <div class="table-wrap" style="border:none;border-radius:0">
             <table>
-              <thead><tr><th>#</th><th>Batch</th><th>Pallet</th><th>Qty</th><th>Bin</th><th></th></tr></thead>
+              <thead><tr><th>#</th><th>Batch</th><th>Type</th><th>Pallet</th><th>Qty</th><th>Bin</th><th></th></tr></thead>
               <tbody id="ibTableBody"><tr class="empty-row"><td colspan="6">Tambahkan baris terlebih dahulu</td></tr></tbody>
             </table>
           </div>
@@ -493,6 +511,19 @@ function inbound() {
       </div>
     </div>
   `);
+
+  q('#ibBatch')?.addEventListener('input', function() {
+    if (this.value.length >= 10) q('#ibPallet')?.focus();
+  });
+  q('#ibPallet')?.addEventListener('input', function() {
+    if (this.value.length >= 2) q('#ibQty')?.focus();
+  });
+  q('#ibQty')?.addEventListener('input', function() {
+    if (this.value.toString().length >= 2) q('#ibBin')?.focus();
+  });
+  q('#ibBin')?.addEventListener('input', function() {
+    if (this.value.length >= 9) q('#ibAddBtn')?.focus();
+  });
 
   autoSelect();
   q('#ibAddBtn').addEventListener('click', ibAddRow);
@@ -517,7 +548,7 @@ function ibAddRow() {
   if (qty <= 0) { toast('Quantity harus lebih dari 0', 'warning'); q('#ibQty').focus(); return; }
   const finalBin = bin || 'STAGE';
 
-  state.inboundRows.push({ batch, pallet, quantity: qty, bin_location: finalBin });
+  state.inboundRows.push({ batch, ptype, pallet, quantity: qty, bin_location: finalBin });
   ibRenderTable();
 
   // Reset per-row fields, focus back to pallet
@@ -552,6 +583,7 @@ function ibRenderTable() {
     <tr>
       <td class="mono txt-muted">${i+1}</td>
       <td>${r.batch}</td>
+      <td class="mono">${r.ptype}</td>
       <td class="mono">${r.pallet}</td>
       <td class="mono">${r.quantity}</td>
       <td class="mono">${r.bin_location}</td>
@@ -605,7 +637,15 @@ function outbound() {
         <div class="panel-header"><div class="panel-title">Form Outbound</div></div>
         <div class="panel-body">
           <div class="form-grid">
-            <div class="field-group"><label class="field-label">Destination *</label><input id="obDest" class="field-input" placeholder="Tujuan pengiriman"></div>
+            <div class="field-group">
+              <label class="field-label">Destination</label>
+              <select class="field-select" id="obDestList">
+                <option value="">--Tujuan--</option>
+                <option value="Customer Lokal">Customer Lokal</option>
+                <option value="Customer Export">Customer Export</option>
+                <option value="WH External">WH External</option>
+              </select> 
+            </div>
           </div>
           <hr style="border:none;border-top:1px solid var(--border);margin:14px 0">
           <div class="form-grid">
@@ -614,7 +654,7 @@ function outbound() {
             <div class="field-group"><label class="field-label">Quantity *</label><input id="obQty" class="field-input" type="number" min="1" placeholder="0"></div>
             <div class="field-group"><label class="field-label">Bin Location *</label><input id="obBin" class="field-input" placeholder="A01-01"></div>
           </div>
-          <div class="field-group"><label class="field-label">Remarks</label><input id="obRemarks" class="field-input" placeholder="Opsional"></div>
+          <div class="field-group"><label class="field-label">Remarks (Nama Customer, Nopol, dan lain-lain)</label><input id="obRemarks" class="field-input" placeholder="Opsional"></div>
           <div class="form-actions">
             <button class="btn btn-secondary" id="obAddBtn">${svgPlus()} Tambah ke Tabel</button>
           </div>
@@ -651,36 +691,35 @@ function outbound() {
   // Autofill qty & bin dari batch + pallet
   async function obAutoFill() {
     const batch  = q('#obBatch')?.value.trim();
-    const pallet = q('#obPallet')?.value.trim().padStart(2,'0');
-    if (!batch || !pallet || pallet === '00') return;
-    const data = await api(`bin_lookup.php?batch=${encodeURIComponent(batch)}&pallet=${encodeURIComponent(pallet)}`);
+    const data = await api(`bin_lookup.php?batch=${encodeURIComponent(batch)}`);
     if (!data.success || !data.data.length) return;
     const bins = data.data;
     if (bins.length === 1) {
+      q('#obPallet').value = bins[0].pallet_number;
       q('#obBin').value = bins[0].bin_location;
       q('#obQty').value = bins[0].quantity;
     } else {
       // Multiple bins: tampilkan pilihan
-      openModal(`Pilih Bin — ${batch} Pallet ${pallet}`, `
+      openModal(`Pilih No Pallet & Bin — ${batch}`, `
         <div style="display:flex;flex-direction:column;gap:8px">
           ${bins.map(b => `
             <button class="btn btn-secondary" style="justify-content:flex-start;font-family:var(--font-mono)"
-              onclick="obFillBin('${b.bin_location}',${b.quantity},event)">
-              ${b.bin_location} — ${b.quantity} ${b.uom}
+              onclick="obFillBin('${b.pallet_number}','${b.bin_location}',${b.quantity},event)">
+              ${b.pallet_number} - ${b.bin_location} - ${b.quantity} ${b.uom}
             </button>`).join('')}
         </div>
       `);
     }
   }
-  window.obFillBin = (bin, qty, e) => {
+  window.obFillBin = (pallet, bin, qty, e) => {
     e.preventDefault();
+    q('#obPallet').value = pallet;
     q('#obBin').value = bin;
     q('#obQty').value = qty;
     closeModal();
   };
 
   q('#obBatch')?.addEventListener('change', obAutoFill);
-  q('#obPallet')?.addEventListener('change', obAutoFill);
 
   q('#obClearBtn').addEventListener('click', () => { state.outboundRows = []; obRenderTable(); });
   q('#obSubmitBtn').addEventListener('click', obSubmit);
@@ -891,36 +930,35 @@ function moving() {
 
   async function mvAutoFill() {
   const batch  = q('#mvBatch')?.value.trim();
-  const pallet = q('#mvPallet')?.value.trim().padStart(2,'0');
-  if (!batch || !pallet || pallet === '00') return;
-  const data = await api(`bin_lookup.php?batch=${encodeURIComponent(batch)}&pallet=${encodeURIComponent(pallet)}`);
+  const data = await api(`bin_lookup.php?batch=${encodeURIComponent(batch)}`);
   if (!data.success || !data.data.length) return;
   const bins = data.data;
     if (bins.length === 1) {
+      q('#mvPallet').value = bins[0].pallet_number;
       q('#mvSrc').value = bins[0].bin_location;
       q('#mvQty').value = bins[0].quantity;
     } else {
       // Multiple bins: tampilkan pilihan
-      openModal(`Pilih Bin — ${batch} Pallet ${pallet}`, `
+      openModal(`Pilih No. Pallet & Bin — ${batch}`, `
         <div style="display:flex;flex-direction:column;gap:8px">
           ${bins.map(b => `
             <button class="btn btn-secondary" style="justify-content:flex-start;font-family:var(--font-mono)"
-              onclick="mvFillBin('${b.bin_location}',${b.quantity},event)">
-              ${b.bin_location} — ${b.quantity} ${b.uom}
+              onclick="mvFillBin('${b.pallet_number}','${b.bin_location}',${b.quantity},event)">
+              ${b.pallet_number} - ${b.bin_location} - ${b.quantity} ${b.uom}
             </button>`).join('')}
         </div>
       `);
     }
   }
-  window.mvFillBin = (bin, qty, e) => {
+  window.mvFillBin = (pallet, bin, qty, e) => {
     e.preventDefault();
+    q('#mvPallet').value = pallet;
     q('#mvSrc').value = bin;
     q('#mvQty').value = qty;
     closeModal();
   };
 
   q('#mvBatch')?.addEventListener('change', mvAutoFill);
-  q('#mvPallet')?.addEventListener('change', mvAutoFill);
 
   q('#mvResetBtn').addEventListener('click', () => {
     ['mvSrc','mvDst','mvBatch','mvPallet','mvQty','mvRemarks'].forEach(id => { const el=q(`#${id}`); if(el) el.value=''; });
@@ -969,7 +1007,6 @@ async function stock(page = 1) {
         <div class="filter-field"><label>Bin Location</label><input class="filter-input" id="fStBin" placeholder="Filter..."></div>
         <div class="filter-field"><label>Location Type</label><input class="filter-input" id="fStType" placeholder="Filter..."></div>
         <div class="filters-actions" style="padding-bottom:0">
-          <button class="btn btn-secondary btn-sm" id="stFilterBtn">Filter</button>
           <button class="btn btn-ghost btn-sm" id="stResetBtn">Reset</button>
           <button class="btn btn-green btn-sm" id="stExportBtn">${svgDownload()} Export</button>
         </div>
@@ -985,10 +1022,22 @@ async function stock(page = 1) {
     </div>
   `);
 
-  q('#stFilterBtn')?.addEventListener('click', () => {
-    stockFilters = { batch: q('#fStBatch').value, pallet_number: q('#fStPallet').value, bin_location: q('#fStBin').value, location_type: q('#fStType').value };
-    stock(1);
-  });
+  let searchTimer;
+    ['fStBatch','fStPallet','fStBin','fStType'].forEach(id => {
+      q(`#${id}`)?.addEventListener('input', () => {
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(() => {
+          stockFilters = {
+            batch:         q('#fStBatch')?.value  || '',
+            pallet_number: q('#fStPallet')?.value || '',
+            bin_location:  q('#fStBin')?.value    || '',
+            location_type: q('#fStType')?.value   || '',
+          };
+          stockFetchData();
+        }, 400); // tunggu 400ms setelah user berhenti mengetik
+      });
+    });
+
   q('#stResetBtn')?.addEventListener('click', () => {
     stockFilters = {}; ['fStBatch','fStPallet','fStBin','fStType'].forEach(id => { const el=q(`#${id}`); if(el) el.value=''; });
     stock(1);
@@ -1018,6 +1067,32 @@ async function stock(page = 1) {
         <td>${r.location_type ? `<span class="badge badge-gray">${r.location_type}</span>` : '-'}</td>
         <td class="mono txt-muted">${fDateTime(r.updated_at)}</td>
       </tr>`).join('')
+    : '<tr class="empty-row"><td colspan="8">Tidak ada data</td></tr>';
+
+  q('#stPagination').innerHTML = renderPagination(data.pagination, 'stock');
+}
+
+async function stockFetchData() {
+  const params = new URLSearchParams({ page: stockPage, ...stockFilters });
+  const data   = await api(`stock.php?${params}`, 'GET');
+  if (!data.success) { showError(data.error); return; }
+
+  const offset = (stockPage - 1) * 50;
+  const sumBar = q('#stSummaryBar');
+  if (sumBar) sumBar.textContent = `Menampilkan ${data.data.length} dari ${data.pagination.total} batch | Total Qty: ${data.summary?.total_qty||0} CTN`;
+
+  q('#stBody').innerHTML = data.data.length
+    ? data.data.map((r,i) => `
+        <tr style="cursor:pointer" onclick="stockShowBins('${r.batch}')" title="Klik untuk lihat detail bin">
+          <td class="mono txt-muted">${offset+i+1}</td>
+          <td><strong>${r.batch}</strong></td>
+          <td class="mono">${r.pallet_count} pallet</td>
+          <td class="mono"><strong>${r.total_qty}</strong></td>
+          <td class="mono txt-muted">${r.uom||'CTN'}</td>
+          <td class="mono">${fNum(r.total_kg)} kg</td>
+          <td>${r.location_type ? `<span class="badge badge-gray">${r.location_type}</span>` : '-'}</td>
+          <td class="mono txt-muted">${fDateTime(r.updated_at)}</td>
+        </tr>`).join('')
     : '<tr class="empty-row"><td colspan="8">Tidak ada data</td></tr>';
 
   q('#stPagination').innerHTML = renderPagination(data.pagination, 'stock');
@@ -1056,91 +1131,119 @@ window.gotoStock = (p) => stock(p);
    ═══════════════════════════════════════════════════════════ */
 let movFilters = {}, movPage = 1;
 
+function movGetFilters() {
+  return {
+    movement_type:  q('#fMvType')?.value  || '',
+    batch:          q('#fMvBatch')?.value || '',
+    transaction_id: q('#fMvTxn')?.value   || '',
+    source:         q('#fMvSrc')?.value   || '',
+    destination:    q('#fMvDst')?.value   || '',
+    date_from:      q('#fMvDateFrom')?.value || '',
+    date_to:        q('#fMvDateTo')?.value   || '',
+  };
+}
+
 async function movements(page = 1) {
   movPage = page;
-  if (page === 1) setContent(`
-    <div class="panel">
-      <div class="filters-bar">
-        <div class="filter-field"><label>Type</label>
-          <select class="filter-select" id="fMvType" style="width:120px">
-            <option value="">Semua</option>
-            <option value="inbound">Inbound</option><option value="outbound">Outbound</option>
-            <option value="softcase">Softcase</option><option value="moving">Moving</option>
-          </select>
+  if (page === 1) {
+    setContent(`
+      <div class="panel">
+        <div class="filters-bar">
+          <div class="filter-field"><label>Type</label>
+            <select class="filter-select" id="fMvType" style="width:120px">
+              <option value="">Semua</option>
+              <option value="inbound">Inbound</option>
+              <option value="outbound">Outbound</option>
+              <option value="softcase">Softcase</option>
+              <option value="moving">Moving</option>
+            </select>
+          </div>
+          <div class="filter-field"><label>Batch</label><input class="filter-input" id="fMvBatch" placeholder="Filter..."></div>
+          <div class="filter-field"><label>TXN ID</label><input class="filter-input" id="fMvTxn" placeholder="Filter..."></div>
+          <div class="filter-field"><label>Source</label><input class="filter-input" id="fMvSrc" placeholder="Filter..."></div>
+          <div class="filter-field"><label>Destination</label><input class="filter-input" id="fMvDst" placeholder="Filter..."></div>
+          <div class="filter-field"><label>Dari</label><input class="filter-input" id="fMvDateFrom" type="date" style="width:140px"></div>
+          <div class="filter-field"><label>Sampai</label><input class="filter-input" id="fMvDateTo" type="date" style="width:140px"></div>
+          <div class="filters-actions">
+            <button class="btn btn-ghost btn-sm" id="mvResetBtn">Reset</button>
+            <button class="btn btn-green btn-sm" id="mvExportBtn">${svgDownload()} Export</button>
+          </div>
         </div>
-        <div class="filter-field"><label>Batch</label><input class="filter-input" id="fMvBatch" placeholder="Filter..."></div>
-        <div class="filter-field"><label>TXN ID</label><input class="filter-input" id="fMvTxn" placeholder="Filter..."></div>
-        <div class="filter-field"><label>Source</label><input class="filter-input" id="fMvSrc" placeholder="Filter..."></div>
-        <div class="filter-field"><label>Destination</label><input class="filter-input" id="fMvDst" placeholder="Filter..."></div>
-        <div class="filter-field"><label>Dari</label><input class="filter-input" id="fMvDateFrom" type="date" style="width:140px"></div>
-        <div class="filter-field"><label>Sampai</label><input class="filter-input" id="fMvDateTo" type="date" style="width:140px"></div>
-        <div class="filters-actions">
-          <button class="btn btn-secondary btn-sm" id="mvFilterBtn">Filter</button>
-          <button class="btn btn-ghost btn-sm" id="mvResetBtn">Reset</button>
-          <button class="btn btn-green btn-sm" id="mvExportBtn">${svgDownload()} Export</button>
+        <div class="table-wrap" style="border:none;border-radius:0">
+          <table>
+            <thead><tr><th>TXN ID</th><th>Type</th><th>Batch</th><th>Qty</th><th>Kg</th><th>Dari</th><th>Ke</th><th>User</th><th>Remarks</th><th>Waktu</th></tr></thead>
+            <tbody id="mvBody"><tr class="empty-row"><td colspan="10">Memuat...</td></tr></tbody>
+          </table>
         </div>
+        <div id="mvPagination" style="padding:12px 16px"></div>
       </div>
-      <div class="table-wrap" style="border:none;border-radius:0">
-        <table>
-          <thead><tr><th>TXN ID</th><th>Type</th><th>Batch</th><th>Qty</th><th>Kg</th><th>Dari</th><th>Ke</th><th>User</th><th>Remarks</th><th>Waktu</th></tr></thead>
-          <tbody id="mvBody"><tr class="empty-row"><td colspan="9">Memuat...</td></tr></tbody>
-        </table>
-      </div>
-      <div id="mvPagination" style="padding:12px 16px"></div>
-    </div>
-  `);
+    `);
 
-  const getFilters = () => ({
-    movement_type: q('#fMvType')?.value     || '',
-    batch:         q('#fMvBatch')?.value    || '',
-    transaction_id:q('#fMvTxn')?.value      || '',
-    source:        q('#fMvSrc')?.value      || '',
-    destination:   q('#fMvDst')?.value      || '',
-    date_from:     q('#fMvDateFrom')?.value || '',
-    date_to:       q('#fMvDateTo')?.value   || '',
-  });
+    // Reset
+    q('#mvResetBtn')?.addEventListener('click', () => {
+      ['fMvType','fMvBatch','fMvTxn','fMvSrc','fMvDst','fMvDateFrom','fMvDateTo']
+        .forEach(id => { const el = q(`#${id}`); if (el) el.value = ''; });
+      movFilters = {};
+      movPage    = 1;
+      movementsFetchData();
+    });
 
-  q('#mvFilterBtn')?.addEventListener('click', () => { movFilters = getFilters(); movements(1); });
-  q('#mvResetBtn')?.addEventListener('click', () => {
-    movFilters = {};
-    ['fMvType','fMvBatch','fMvTxn','fMvSrc','fMvDst','fMvDateFrom','fMvDateTo'].forEach(id => { const el=q(`#${id}`); if(el) el.value=''; });
-    movements(1);
-  });
-  q('#mvExportBtn')?.addEventListener('click', async () => {
-    const f = getFilters();
-    const hasF = Object.values(f).some(v => v);
-    if (!hasF) {
-      if (!confirm('Tidak ada filter aktif. Export semua data? Ini mungkin membutuhkan waktu lama.')) return;
-    }
-    const p = new URLSearchParams({type:'movements', ...f});
-    window.open(`api/export.php?${p}`, '_blank');
-  });
+    // Export
+    q('#mvExportBtn')?.addEventListener('click', () => {
+      const f    = movGetFilters();
+      const hasF = Object.values(f).some(v => v);
+      if (!hasF && !confirm('Tidak ada filter aktif. Export semua data?')) return;
+      window.open(`api/export.php?${new URLSearchParams({type:'movements', ...f})}`, '_blank');
+    });
 
+    // Live search
+    let movTimer;
+    ['fMvBatch','fMvTxn','fMvSrc','fMvDst','fMvDateFrom','fMvDateTo'].forEach(id => {
+      q(`#${id}`)?.addEventListener('input', () => {
+        clearTimeout(movTimer);
+        movTimer = setTimeout(() => {
+          movFilters = movGetFilters();
+          movPage    = 1;
+          movementsFetchData();
+        }, 400);
+      });
+    });
+    q('#fMvType')?.addEventListener('change', () => {
+      movFilters = movGetFilters();
+      movPage    = 1;
+      movementsFetchData();
+    });
+  }
+
+  await movementsFetchData();
+}
+
+async function movementsFetchData() {
   const params = new URLSearchParams({ page: movPage, ...movFilters });
   const data   = await api(`movements.php?${params}`, 'GET');
   if (!data.success) { showError(data.error); return; }
 
-  const offset = (movPage-1)*50;
+  const offset = (movPage - 1) * 50;
   q('#mvBody').innerHTML = data.data.length
-    ? data.data.map((r,i) => `
-      <tr>
-        <td class="mono" style="font-size:11px">${r.transaction_id}</td>
-        <td><span class="badge ${BADGE_MAP[r.movement_type]||'badge-gray'}">${r.movement_type}</span></td>
-        <td>${r.batch||'-'}</td>
-        <td class="mono">${r.quantity||0} ${r.uom||''}</td>
-        <td class="mono">${fNum(r.quantity_kg)} kg</td>
-        <td class="txt-muted">${r.source_location||'-'}</td>
-        <td class="txt-muted">${r.destination_location||'-'}</td>
-        <td class="mono txt-muted">${r.username||'-'}</td>
-        <td class="mono">${r.remarks||'-'}</td>
-        <td class="mono txt-muted" style="font-size:11px">${fDateTime(r.created_at)}</td>
-      </tr>`).join('')
-    : '<tr class="empty-row"><td colspan="9">Tidak ada data</td></tr>';
+    ? data.data.map((r, i) => `
+        <tr>
+          <td class="mono" style="font-size:11px">${r.transaction_id}</td>
+          <td><span class="badge ${BADGE_MAP[r.movement_type]||'badge-gray'}">${r.movement_type}</span></td>
+          <td>${r.batch||'-'}</td>
+          <td class="mono">${r.quantity||0} ${r.uom||''}</td>
+          <td class="mono">${fNum(r.quantity_kg)} kg</td>
+          <td class="txt-muted">${r.source_location||'-'}</td>
+          <td class="txt-muted">${r.destination_location||'-'}</td>
+          <td class="mono txt-muted">${r.username||'-'}</td>
+          <td class="mono txt-muted">${r.remarks||'-'}</td>
+          <td class="mono txt-muted" style="font-size:11px">${fDateTime(r.created_at)}</td>
+        </tr>`).join('')
+    : '<tr class="empty-row"><td colspan="10">Tidak ada data</td></tr>';
 
   q('#mvPagination').innerHTML = renderPagination(data.pagination, 'movements');
 }
 
-window.gotoMovements = (p) => movements(p);
+window.gotoMovements = (p) => { movPage = p; movementsFetchData(); };
 
 /* ═══════════════════════════════════════════════════════════
    SOFTCASE MONITORING
@@ -1457,9 +1560,6 @@ const svgSpinner   = () => `<svg viewBox="0 0 24 24" fill="none" stroke="current
 function initBatchBinPopups() {
   const batchInputs       = ['#ibBatch','#obBatch','#scBatch','#mvBatch','#fStBatch','#fScBatch','#fMvBatch'];
   const binInputs         = ['#ibBin','#obBin','#mvSrc','#mvDst','#fStBin','#scSourceBin'];
-  const fromInputs        = ['#ibFrom'];
-  const storageInputs     = ['#ibStorage'];
-  const destInputs        = ['#obDest'];
 
   batchInputs.forEach(sel => {
     const el = q(sel);
@@ -1472,27 +1572,6 @@ function initBatchBinPopups() {
     const el = q(sel);
     if (el && !el.dataset.popupBound) {
       el.addEventListener('dblclick', () => openBinPopup(el));
-      el.dataset.popupBound = 'true';
-    }
-  });
-  fromInputs.forEach(sel => {
-    const el = q(sel);
-    if (el && !el.dataset.popupBound) {
-      el.addEventListener('dblclick', () => openFromPopup(el));
-      el.dataset.popupBound = 'true';
-    }
-  });
-  storageInputs.forEach(sel => {
-    const el = q(sel);
-    if (el && !el.dataset.popupBound) {
-      el.addEventListener('dblclick', () => openStoragePopup(el));
-      el.dataset.popupBound = 'true';
-    }
-  });
-  destInputs.forEach(sel => {
-    const el = q(sel);
-    if (el && !el.dataset.popupBound) {
-      el.addEventListener('dblclick', () => openDestPopup(el));
       el.dataset.popupBound = 'true';
     }
   });
@@ -1579,36 +1658,6 @@ function openBinPopup(targetEl) {
     closeModal();
     targetEl.dispatchEvent(new Event('input'));
   };
-}
-
-function openFromPopup(targetEl) {
-  const options = ['Production', 'WH External', 'Customer Reject'];
-  openModal('Pilih Inbound From', `
-    <div style="display:flex;flex-direction:column;gap:8px">
-      ${options.map(o => `<button class="btn btn-secondary" style="justify-content:flex-start" onclick="applyPopupValue('${o}',event)">${o}</button>`).join('')}
-    </div>
-  `);
-  window._popupTarget = targetEl;
-}
-
-function openStoragePopup(targetEl) {
-  const options = ['LSN Ambient', 'LSN Chiller'];
-  openModal('Pilih Storage Location', `
-    <div style="display:flex;flex-direction:column;gap:8px">
-      ${options.map(o => `<button class="btn btn-secondary" style="justify-content:flex-start" onclick="applyPopupValue('${o}',event)">${o}</button>`).join('')}
-    </div>
-  `);
-  window._popupTarget = targetEl;
-}
-
-function openDestPopup(targetEl) {
-  const options = ['WH External', 'Customer Export', 'Customer Lokal', 'Production'];
-  openModal('Pilih Destination', `
-    <div style="display:flex;flex-direction:column;gap:8px">
-      ${options.map(o => `<button class="btn btn-secondary" style="justify-content:flex-start" onclick="applyPopupValue('${o}',event)">${o}</button>`).join('')}
-    </div>
-  `);
-  window._popupTarget = targetEl;
 }
 
 window.applyPopupValue = (val, e) => {

@@ -26,15 +26,15 @@ if ($bin) {
     exit;
 }
 
-if ($batch && $pallet) {
+if ($batch) {
     // Feature 7: autofill outbound dari batch + pallet
     $stmt = $pdo->prepare("
         SELECT batch, pallet_number, quantity, uom, quantity_kg, bin_location, location_type
         FROM bin_locations
-        WHERE batch = ? AND pallet_number = ? AND quantity > 0
+        WHERE batch = ? AND quantity > 0
         ORDER BY updated_at DESC
     ");
-    $stmt->execute([$batch, $pallet]);
+    $stmt->execute([$batch]);
     $results = $stmt->fetchAll();
     jsonResponse(['success' => true, 'data' => $results]);
     exit;
