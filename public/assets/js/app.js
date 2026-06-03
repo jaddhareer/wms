@@ -265,10 +265,9 @@ async function dashboard() {
           <div class="section-header"><div class="section-title">Inbound — 3 Hari Terakhir</div></div>
           <div class="table-wrap">
             <table>
-              <thead><tr><th>TXN ID</th><th>Batch</th><th>Qty</th><th>Kg</th><th>Dari</th><th>Waktu</th></tr></thead>
+              <thead><tr><th>Batch</th><th>Qty</th><th>Kg</th><th>Dari</th><th>Waktu</th></tr></thead>
               <tbody>${recent_in.length ? recent_in.map(r=>`
                 <tr>
-                  <td class="mono" style="font-size:11px">${r.transaction_id}</td>
                   <td>${r.batch||'-'}</td>
                   <td class="mono">${r.quantity} ${r.uom}</td>
                   <td class="mono">${fNum(r.quantity_kg)} kg</td>
@@ -282,10 +281,9 @@ async function dashboard() {
           <div class="section-header"><div class="section-title">Outbound — 3 Hari Terakhir</div></div>
           <div class="table-wrap">
             <table>
-              <thead><tr><th>TXN ID</th><th>Batch</th><th>Qty</th><th>Kg</th><th>Ke</th><th>Waktu</th></tr></thead>
+              <thead><tr><th>Batch</th><th>Qty</th><th>Kg</th><th>Ke</th><th>Waktu</th></tr></thead>
               <tbody>${recent_out.length ? recent_out.map(r=>`
                 <tr>
-                  <td class="mono" style="font-size:11px">${r.transaction_id}</td>
                   <td>${r.batch||'-'}</td>
                   <td class="mono">${r.quantity} ${r.uom}</td>
                   <td class="mono">${fNum(r.quantity_kg)} kg</td>
