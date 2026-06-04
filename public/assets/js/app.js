@@ -534,7 +534,7 @@ function inbound() {
   q('#ibBin').addEventListener('keydown', e => { if (e.key === 'Enter') ibAddRow(); });
 }
 
-function ibAddRow() {
+async function ibAddRow() {
   const batch   = q('#ibBatch').value.trim();
   const pallet  = q('#ibPallet').value.trim().padStart(2,'0') || '01';
   const qty     = parseInt(q('#ibQty').value) || 0;
@@ -546,6 +546,21 @@ function ibAddRow() {
   if (!from || !storage || !ptype) { toast('Isi Inbound From, Storage Location, dan Product Type terlebih dahulu', 'warning'); return; }
   if (!batch) { toast('Batch wajib diisi', 'warning'); q('#ibBatch').focus(); return; }
   if (qty <= 0) { toast('Quantity harus lebih dari 0', 'warning'); q('#ibQty').focus(); return; }
+
+  // Cek apakah batch + pallet sudah ada di database
+  const check = await api(`check_inbound.php?batch=${encodeURIComponent(batch)}&pallet=${encodeURIComponent(pallet)}`);
+  if (check.success && check.data.length > 0) {
+    const palls = check.data;
+    openModal(`PERINGATAN`, `
+      <div style="display:flex;flex-direction:column;gap:8px">
+        Batch : ${batch} <br> Pallet : ${pallet} <br> sudah ada di Database! <br> input Nomor Pallet yang sesuai!
+      </div>
+    `);
+    
+    q('#ibPallet').value = '';
+    return;
+  }
+
   const finalBin = bin || 'STAGE';
 
   state.inboundRows.push({ batch, ptype, pallet, quantity: qty, bin_location: finalBin });
@@ -963,26 +978,27 @@ function moving() {
   };
 
   async function mvAutoFill() {
-  const batch  = q('#mvBatch')?.value.trim();
-  const data = await api(`bin_lookup.php?batch=${encodeURIComponent(batch)}`);
-  if (!data.success || !data.data.length) return;
-  const bins = data.data;
-    if (bins.length === 1) {
-      q('#mvPallet').value = bins[0].pallet_number;
-      q('#mvSrc').value = bins[0].bin_location;
-      q('#mvQty').value = bins[0].quantity;
-    } else {
-      // Multiple bins: tampilkan pilihan
-      openModal(`Pilih No. Pallet & Bin — ${batch}`, `
-        <div style="display:flex;flex-direction:column;gap:8px">
-          ${bins.map(b => `
-            <button class="btn btn-secondary" style="justify-content:flex-start;font-family:var(--font-mono)"
-              onclick="mvFillBin('${b.pallet_number}','${b.bin_location}',${b.quantity},event)">
-              ${b.pallet_number} - ${b.bin_location} - ${b.quantity} ${b.uom}
-            </button>`).join('')}
-        </div>
-      `);
-    }
+    if(this.value.length !== 10) return;
+    const batch  = q('#mvBatch')?.value.trim();
+    const data = await api(`bin_lookup.php?batch=${encodeURIComponent(batch)}`);
+    if (!data.success || !data.data.length) return;
+    const bins = data.data;
+      if (bins.length === 1) {
+        q('#mvPallet').value = bins[0].pallet_number;
+        q('#mvSrc').value = bins[0].bin_location;
+        q('#mvQty').value = bins[0].quantity;
+      } else {
+        // Multiple bins: tampilkan pilihan
+        openModal(`Pilih No. Pallet & Bin — ${batch}`, `
+          <div style="display:flex;flex-direction:column;gap:8px">
+            ${bins.map(b => `
+              <button class="btn btn-secondary" style="justify-content:flex-start;font-family:var(--font-mono)"
+                onclick="mvFillBin('${b.pallet_number}','${b.bin_location}',${b.quantity},event)">
+                ${b.pallet_number} - ${b.bin_location} - ${b.quantity} ${b.uom}
+              </button>`).join('')}
+          </div>
+        `);
+      }
   }
   window.mvFillBin = (pallet, bin, qty, e) => {
     e.preventDefault();
