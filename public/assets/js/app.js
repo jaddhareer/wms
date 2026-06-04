@@ -553,7 +553,9 @@ async function ibAddRow() {
     const palls = check.data;
     openModal(`PERINGATAN`, `
       <div style="display:flex;flex-direction:column;gap:8px">
-        Batch : ${batch} <br> Pallet : ${pallet} <br> sudah ada di Database! <br> input Nomor Pallet yang sesuai!
+        ${palls.map(b => `
+          Batch : ${b.batch} <br> Pallet : ${b.pallet_number} <br> sudah ada di ${b.location_type} ${b.bin_location}! <br> input Nomor Pallet yang sesuai!
+          `)}
       </div>
     `);
     
