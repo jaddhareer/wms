@@ -511,6 +511,7 @@ function inbound() {
   `);
 
   q('#ibBatch')?.addEventListener('input', function() {
+    this.value = this.value.toUpperCase();
     if (this.value.length >= 10) q('#ibPallet')?.focus();
   });
   q('#ibPallet')?.addEventListener('input', function() {
@@ -520,6 +521,7 @@ function inbound() {
     if (this.value.toString().length >= 2) q('#ibBin')?.focus();
   });
   q('#ibBin')?.addEventListener('input', function() {
+    this.value = this.value.toUpperCase();
     if (this.value.length >= 9) q('#ibAddBtn')?.focus();
   });
 
@@ -1519,7 +1521,7 @@ async function api(endpoint, method = 'GET', body = null, withCsrf = true) {
 
 function autoSelect() {
   qAll('.field-input[type="text"], .field-input[type="number"], .field-input[type="password"], .filter-input').forEach(el => {
-    el.addEventListener('focus', function() { this.select(); this.value = this.value.toUpperCase() });
+    el.addEventListener('focus', function() { this.select();});
   });
 }
 
