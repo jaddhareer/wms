@@ -709,6 +709,7 @@ function outbound() {
 
   // Autofill qty & bin dari batch + pallet
   async function obAutoFill() {
+    if(this.value.length !== 10) return;
     const batch  = q('#obBatch')?.value.trim();
     const data = await api(`bin_lookup.php?batch=${encodeURIComponent(batch)}`);
     if (!data.success || !data.data.length) return;
