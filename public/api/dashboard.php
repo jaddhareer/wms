@@ -17,13 +17,15 @@ $capAmbient    = 1305;
 $capChiller    = 81;
 
 $palletAmbient = (int)$pdo->query("
-    SELECT COUNT(*) FROM bin_locations
-    WHERE quantity > 0 AND location_type = 'LSN Ambient'
+    SELECT
+    (SELECT COUNT(DISTINCT bin_location) FROM bin_locations WHERE quantity > 0 AND location_type = 'LSN Ambient') + 
+    (SELECT COUNT(*) FROM bin_locations WHERE quantity > 0 AND location_type = 'LSN Ambient' AND bin_location = 'STAGE') - 3;
 ")->fetchColumn();
 
 $palletChiller = (int)$pdo->query("
-    SELECT COUNT(*) FROM bin_locations
-    WHERE quantity > 0 AND location_type = 'LSN Chiller'
+    SELECT
+    (SELECT COUNT(DISTINCT bin_location) FROM bin_locations WHERE quantity > 0 AND location_type = 'LSN Chiller') + 
+    (SELECT COUNT(*) FROM bin_locations WHERE quantity > 0 AND location_type = 'LSN Chiller' AND bin_location = 'STAGE')
 ")->fetchColumn();
 
 $occAmbient = $capAmbient > 0 ? round(($palletAmbient / $capAmbient) * 100, 1) : 0;
