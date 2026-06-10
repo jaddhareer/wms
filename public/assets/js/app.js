@@ -548,8 +548,9 @@ async function ibAddRow() {
   if (qty <= 0) { toast('Quantity harus lebih dari 0', 'warning'); q('#ibQty').focus(); return; }
 
   // Cek apakah batch + pallet sudah ada di database
+  let isFromExt = q('#ibFrom').value === 'WH External'
   const check = await api(`check_inbound.php?batch=${encodeURIComponent(batch)}&pallet=${encodeURIComponent(pallet)}`);
-  if (check.success && check.data.length > 0) {
+  if (!isFromExt && check.success && check.data.length > 0) {
     const palls = check.data;
     openModal(`PERINGATAN`, `
       <div style="display:flex;flex-direction:column;gap:8px">

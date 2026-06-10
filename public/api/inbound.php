@@ -106,10 +106,11 @@ try {
                 UPDATE bin_locations
                 SET quantity    = quantity - ?,
                     quantity_kg = ROUND(quantity_kg - ?, 2),
+                    location_type = ?
                     updated_at  = NOW()
                 WHERE batch = ? AND pallet_number = ? AND bin_location = 'Jasco'
             ");
-            $decrJasco->execute([$quantity, $quantity_kg, $batch, $pallet_number]);
+            $decrJasco->execute([$quantity, $quantity_kg, $storage_location, $batch, $pallet_number]);
         }
 
         $results[] = ['batch' => $batch, 'pallet' => $pallet_number, 'qty' => $quantity];
