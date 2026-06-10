@@ -14,7 +14,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 }
 
 $batch         = sanitize(getInput('batch', ''));
-$pallet_number = palletFormat(getInput('pallet', '01'));
+$pallet_number = palletFormat(getInput('pallet' . 'sc', '01'));
 $qty_checked   = (int)getInput('qty_checked', 0);
 $uom_checked   = sanitize(getInput('uom_checked', 'CTN'));
 $qty_soft      = (int)getInput('qty_soft', 0);

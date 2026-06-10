@@ -868,7 +868,7 @@ function softcase() {
           ${bins.map(b => `
             <button class="btn btn-secondary" style="justify-content:flex-start;font-family:var(--font-mono)"
               onclick="scFillQty('${b.pallet_number}',${b.quantity},event)">
-              ${b.pallet_number} - ${b.quantity} ${b.uom}
+              ${b.pallet_number} - ${b.quantity} ${b.uom} - ${b.bin_location}
             </button>`).join('')}
         </div>
       `);
