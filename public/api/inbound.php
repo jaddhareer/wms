@@ -106,7 +106,7 @@ try {
                 UPDATE bin_locations
                 SET quantity    = quantity - ?,
                     quantity_kg = ROUND(quantity_kg - ?, 2),
-                    location_type = ?
+                    location_type = ?,
                     updated_at  = NOW()
                 WHERE batch = ? AND pallet_number = ? AND bin_location = 'Jasco'
             ");
