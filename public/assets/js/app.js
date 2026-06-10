@@ -720,13 +720,19 @@ function outbound() {
       q('#obQty').value = bins[0].quantity;
     } else {
       // Multiple bins: tampilkan pilihan
-      openModal(`Pilih No Pallet & Bin — ${batch}`, `
+      openModal(`Pilih Bin — ${batch}`, `
         <div style="display:flex;flex-direction:column;gap:8px">
-          ${bins.map(b => `
-            <button class="btn btn-secondary" style="justify-content:flex-start;font-family:var(--font-mono)"
-              onclick="obFillBin('${b.pallet_number}','${b.bin_location}',${b.quantity},event)">
-              ${b.pallet_number} - ${b.bin_location} - ${b.quantity} ${b.uom}
-            </button>`).join('')}
+          ${bins.map(b => {
+            const isAdded = state.outboundRows.some(r => r.batch === b.batch && r.pallet === b.pallet_number);
+            return `
+              <button class="btn btn-secondary" 
+                style="justify-content:flex-start;font-family:var(--font-mono);${isAdded ? 'opacity:.4;cursor:not-allowed' : ''}"
+                onclick="${isAdded ? '' : `obFillBin('${b.pallet_number}','${b.bin_location}',${b.quantity},event)`}"
+                ${isAdded ? 'disabled' : ''}>
+                ${b.pallet_number} - ${b.bin_location} — ${b.quantity} ${b.uom}
+                ${isAdded ? '<span style="margin-left:auto;font-size:10px;color:var(--text-muted)">sudah ditambahkan</span>' : ''}
+              </button>`;
+          }).join('')}
         </div>
       `);
     }
@@ -762,7 +768,7 @@ function obAddRow() {
   state.outboundRows.push({ batch, pallet, quantity: qty, bin_location: bin });
   obRenderTable();
   q('#obPallet').value = ''; q('#obQty').value = ''; q('#obBin').value = '';
-  q('#obPallet').focus();
+  q('#obBatch').focus();
 }
 
 function obRenderTable() {

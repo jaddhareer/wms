@@ -19,12 +19,12 @@ switch ($mode) {
     // ─── DAILY: 7 hari dari tanggal dipilih ─────────────────
     case 'daily':
         $dateFrom = sanitize($_GET['date_from'] ?? date('Y-m-d', strtotime('-6 days')));
-        $dateTo   = date('Y-m-d', strtotime($dateFrom . ' +7 days'));
+        $dateTo   = date('Y-m-d', strtotime($dateFrom . ' +6 days'));
 
         $stmtIn = $pdo->prepare("
             SELECT DATE(created_at) AS p, SUM(quantity) AS total
             FROM transactions
-            WHERE movement_type = 'inbound'
+            WHERE movement_type = 'inbound' AND source_location = 'Production'
               AND DATE(created_at) BETWEEN ? AND ?
             GROUP BY p ORDER BY p
         ");
@@ -61,7 +61,7 @@ switch ($mode) {
         $stmtIn = $pdo->prepare("
             SELECT YEARWEEK(created_at, 1) AS p, SUM(quantity) AS total
             FROM transactions
-            WHERE movement_type = 'inbound'
+            WHERE movement_type = 'inbound' AND source_location = 'Production'
             AND DATE(created_at) BETWEEN ? AND ?
             GROUP BY p ORDER BY p
         ");
@@ -104,7 +104,7 @@ switch ($mode) {
         $stmtIn = $pdo->prepare("
             SELECT DATE_FORMAT(created_at, '%Y-%m') AS p, SUM(quantity) AS total
             FROM transactions
-            WHERE movement_type = 'inbound'
+            WHERE movement_type = 'inbound' AND source_location = 'Production'
               AND DATE(created_at) BETWEEN ? AND ?
             GROUP BY p ORDER BY p
         ");
@@ -143,7 +143,7 @@ switch ($mode) {
         $stmtIn = $pdo->prepare("
             SELECT YEAR(created_at) AS p, SUM(quantity) AS total
             FROM transactions
-            WHERE movement_type = 'inbound'
+            WHERE movement_type = 'inbound' AND source_location = 'Production'
               AND YEAR(created_at) BETWEEN ? AND ?
             GROUP BY p ORDER BY p
         ");
