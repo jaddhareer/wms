@@ -855,6 +855,7 @@ function softcase() {
   autoSelect();
 
   async function scAutoFill() {
+  if(this.value.length !== 10) return;
   const batch  = q('#scBatch')?.value.trim();
   const data = await api(`bin_lookup.php?batch=${encodeURIComponent(batch)}`);
   if (!data.success || !data.data.length) return;

@@ -14,7 +14,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 }
 
 $batch         = sanitize(getInput('batch', ''));
-$pallet_number = palletFormat(getInput('pallet' . 'sc', '01'));
+$pallet_number = palletFormat(getInput('pallet', '01'));
 $qty_checked   = (int)getInput('qty_checked', 0);
 $uom_checked   = sanitize(getInput('uom_checked', 'CTN'));
 $qty_soft      = (int)getInput('qty_soft', 0);
@@ -101,7 +101,7 @@ try {
             quantity_kg = ROUND(quantity_kg + ?, 2),
             updated_at  = NOW()
     ");
-    $incrStmt->execute([$batch, $pallet_number, $qty_soft_ctn, $src['product_type'], $softKg, $qty_soft_ctn, $softKg]);
+    $incrStmt->execute([$batch, $pallet_number . "SC", $qty_soft_ctn, $src['product_type'], $softKg, $qty_soft_ctn, $softKg]);
 
     // Update tabel softcase
     $scStmt = $pdo->prepare("
