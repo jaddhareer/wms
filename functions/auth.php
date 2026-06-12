@@ -6,6 +6,12 @@ defined('BASE_PATH') or die('Direct access not allowed');
 
 function sessionStart(): void {
     if (session_status() === PHP_SESSION_NONE) {
+        $sessionPath = BASE_PATH . '/storage/sessions';
+        if (!is_dir($sessionPath)) {
+            mkdir($sessionPath, 0700, true);
+        }
+        session_save_path($sessionPath);
+
         session_set_cookie_params([
             'lifetime' => SESSION_TIMEOUT,
             'path'     => '/',
