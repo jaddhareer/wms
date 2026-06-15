@@ -526,6 +526,51 @@ function inbound() {
   });
 
   autoSelect();
+
+  q('#ibBatch').addEventListener('input', ibAutoFill);
+  
+  async function ibAutoFill() {
+    const isFromExt = q('#ibFrom').value === 'WH External';
+    if(!isFromExt) return;
+    if(this.value.length !== 10) return;
+    const batch = q('#ibBatch')?.value.trim();
+    const location = 'Jasco';
+    const data = await api(`check_jasco.php?batch=${encodeURIComponent(batch)}&bin_location=${encodeURIComponent(location)}`);
+
+    if(!data.success || !data.data.length) return;
+    const jascoStock = data.data;
+    if(jascoStock.length === 1) {
+      q('#ibPallet').value = jascoStock[0].pallet_number;
+      q('#ibBin').value = jascoStock[0].bin_location;
+      q('#ibQty').value = jascoStock[0].quantity;
+      q('#ibProductType').value = jascoStock[0].product_type;
+      q('#ibUom').value = jascoStock[0].uom;
+    } else {
+      openModal(`Pilih Bin ${batch}`, `
+      <div style="display:flex;flex-direction:column;gap:8px">
+        ${jascoStock.map(b => {
+          const isAdded = state.inboundRows.some(r => r.batch === b.batch && r.pallet === b.pallet_number);
+          return `
+            <button class="btn btn-secondary" 
+              style="justify-content:flex-start;font-family:var(--font-mono);${isAdded ? 'opacity:.4;cursor:not-allowed' : ''}"
+              onclick="${isAdded ? '' : `ibFillBin('${b.pallet_number}','${b.bin_location}',${b.quantity},event)`}"
+              ${isAdded ? 'disabled' : ''}>
+              ${b.pallet_number} - ${b.bin_location} ${b.quantity} ${b.uom}
+              ${isAdded ? '<span style="margin-left:auto;font-size:10px;color:var(--text-muted)">sudah ditambahkan</span>' : ''}
+            </button>`;
+        }).join('')}
+      </div>
+    `);
+    }
+  }
+  window.ibFillBin = (pallet, bin, qty, e) => {
+  e.preventDefault();
+  q('#ibPallet').value = pallet;
+  q('#ibBin').value = bin;
+  q('#ibQty').value = qty;
+  closeModal();
+  };
+
   q('#ibAddBtn').addEventListener('click', ibAddRow);
   q('#ibClearBtn').addEventListener('click', () => { state.inboundRows = []; ibRenderTable(); });
   q('#ibSubmitBtn').addEventListener('click', ibSubmit);
@@ -708,6 +753,8 @@ function outbound() {
   autoSelect();
   q('#obAddBtn').addEventListener('click', obAddRow);
 
+  q('#obBatch')?.addEventListener('input', obAutoFill);
+
   // Autofill qty & bin dari batch + pallet
   async function obAutoFill() {
     if(this.value.length !== 10) return;
@@ -745,8 +792,6 @@ function outbound() {
     q('#obQty').value = qty;
     closeModal();
   };
-
-  q('#obBatch')?.addEventListener('input', obAutoFill);
 
   q('#obClearBtn').addEventListener('click', () => { state.outboundRows = []; obRenderTable(); });
   q('#obSubmitBtn').addEventListener('click', obSubmit);
