@@ -1347,7 +1347,7 @@ window.showTxnDetail = async (txnId) => {
     </div>
     <div class="table-wrap" style="border:none">
       <table>
-        <thead><tr><th>Batch</th><th>Pallet</th><th>Qty</th><th>Kg</th><th>Dari</th><th>Ke</th><th>Bin</th><th>Remarks</th></tr></thead>
+        <thead><tr><th>Batch</th><th>Pallet</th><th>Qty</th><th>Kg</th><th>Dari</th><th>Bin</th><th>Ke</th><th>Remarks</th></tr></thead>
         <tbody>
           ${rows.map(r => `
             <tr>
@@ -1356,8 +1356,8 @@ window.showTxnDetail = async (txnId) => {
               <td class="mono">${r.quantity} ${r.uom||''}</td>
               <td class="mono">${fNum(r.quantity_kg)} kg</td>
               <td class="txt-muted">${r.source_location||'-'}</td>
-              <td class="txt-muted">${r.destination_location||'-'}</td>
               <td class="mono txt-muted">${r.bin_location||'-'}</td>
+              <td class="txt-muted">${r.destination_location||'-'}</td>
               <td class="mono txt-muted">${r.remarks||'-'}</td>
             </tr>`).join('')}
         </tbody>

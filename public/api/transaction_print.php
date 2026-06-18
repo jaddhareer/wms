@@ -49,8 +49,8 @@ $h = $rows[0];
                 <td><?= htmlspecialchars($r['uom'] ?? '') ?></td>
                 <td><?= number_format($r['quantity_kg'],2) ?></td>
                 <td><?= htmlspecialchars($r['source_location'] ?? '-') ?></td>
-                <td><?= htmlspecialchars($r['destination_location'] ?? '-') ?></td>
                 <td><?= htmlspecialchars($r['bin_location'] ?? '-') ?></td>
+                <td><?= htmlspecialchars($r['destination_location'] ?? '-') ?></td>
                 <td><?= htmlspecialchars($r['remarks'] ?? '-') ?></td>
             </tr>
             <?php endforeach; ?>
