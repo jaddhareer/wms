@@ -63,13 +63,13 @@ try {
         // Insert transaction
         $stmt = $pdo->prepare("
             INSERT INTO transactions
-                (transaction_id, movement_type, batch, quantity, uom, quantity_kg,
-                source_location, destination_location, user_id, remarks, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, 'WH LSN', ?, ?, NOW())
+                (transaction_id, movement_type, batch, pallet_number, quantity, uom, quantity_kg,
+                source_location, destination_location, bin_location, user_id, remarks, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'WH LSN', ?, ?, ?, NOW())
         ");
         $stmt->execute([
-            $txn_id, $movementType, $batch, $quantity, $uom, $quantity_kg,
-            $isFromWHExternal ? 'Jasco' : $inbound_from, $user['id'], $remarks
+            $txn_id, $movementType, $batch, $pallet_number, $quantity, $uom, $quantity_kg,
+            $isFromWHExternal ? 'Jasco' : $inbound_from, $bin_location, $user['id'], $remarks
         ]);
 
         // Upsert bin_locations

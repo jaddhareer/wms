@@ -601,7 +601,7 @@ async function ibAddRow() {
       <div style="display:flex;flex-direction:column;gap:8px">
         ${palls.map(b => `
           Batch : ${b.batch} <br> Pallet : ${b.pallet_number} <br> sudah ada di ${b.location_type} ${b.bin_location}! <br> input Nomor Pallet yang sesuai!
-          `)}
+          `).join('')}
       </div>
     `);
     
@@ -1139,43 +1139,24 @@ async function stock(page = 1) {
             bin_location:  q('#fStBin')?.value    || '',
             location_type: q('#fStType')?.value   || '',
           };
+          stockPage = 1;
           stockFetchData();
         }, 400); // tunggu 400ms setelah user berhenti mengetik
       });
     });
 
   q('#stResetBtn')?.addEventListener('click', () => {
-    stockFilters = {}; ['fStBatch','fStPallet','fStBin','fStType'].forEach(id => { const el=q(`#${id}`); if(el) el.value=''; });
-    stock(1);
+    stockFilters = {}; 
+    ['fStBatch','fStPallet','fStBin','fStType'].forEach(id => { const el=q(`#${id}`); if(el) el.value=''; });
+    stockPage = 1;
+    stockFetchData();
   });
   q('#stExportBtn')?.addEventListener('click', () => {
     const p = new URLSearchParams({type:'stock', ...stockFilters});
     window.open(`api/export.php?${p}`, '_blank');
   });
 
-  const params = new URLSearchParams({ page: stockPage, ...stockFilters });
-  const data   = await api(`stock.php?${params}`, 'GET');
-  if (!data.success) { showError(data.error); return; }
-
-  const offset = (stockPage - 1) * 50;
-  const sumBar = q('#stSummaryBar');
-  if (sumBar) sumBar.textContent = `Menampilkan ${data.data.length} dari ${data.pagination.total} records | Total Qty: ${data.summary?.total_qty||0} CTN | Total Pallets: ${data.summary?.total_pallets||0}`;
-
-  q('#stBody').innerHTML = data.data.length
-    ? data.data.map((r,i) => `
-      <tr style="cursor:pointer" onclick="stockShowBins('${r.batch}')" title="Klik untuk lihat detail bin">
-        <td class="mono txt-muted">${offset+i+1}</td>
-        <td><strong>${r.batch}</strong></td>
-        <td class="mono">${r.pallet_count} pallet</td>
-        <td class="mono"><strong>${r.total_qty}</strong></td>
-        <td class="mono txt-muted">${r.uom||'CTN'}</td>
-        <td class="mono">${fNum(r.total_kg)} kg</td>
-        <td>${r.location_type ? `<span class="badge badge-gray">${r.location_type}</span>` : '-'}</td>
-        <td class="mono txt-muted">${fDateTime(r.updated_at)}</td>
-      </tr>`).join('')
-    : '<tr class="empty-row"><td colspan="8">Tidak ada data</td></tr>';
-
-  q('#stPagination').innerHTML = renderPagination(data.pagination, 'stock');
+  await stockFetchData()
 }
 
 async function stockFetchData() {
@@ -1230,7 +1211,7 @@ window.stockShowBins = async (batch) => {
   `);
 };
 
-window.gotoStock = (p) => stock(p);
+window.gotoStock = (p) => {stockPage = p; stockFetchData();};
 
 /* ═══════════════════════════════════════════════════════════
    MOVEMENTS
@@ -1332,7 +1313,7 @@ async function movementsFetchData() {
   const offset = (movPage - 1) * 50;
   q('#mvBody').innerHTML = data.data.length
     ? data.data.map((r, i) => `
-        <tr>
+        <tr style="cursor:pointer" onclick="showTxnDetail('${r.transaction_id}')" title="Klik untuk detail">
           <td class="mono" style="font-size:11px">${r.transaction_id}</td>
           <td><span class="badge ${BADGE_MAP[r.movement_type]||'badge-gray'}">${r.movement_type}</span></td>
           <td>${r.batch||'-'}</td>
@@ -1348,6 +1329,66 @@ async function movementsFetchData() {
 
   q('#mvPagination').innerHTML = renderPagination(data.pagination, 'movements');
 }
+
+window.showTxnDetail = async (txnId) => {
+  const data = await api(`transaction_detail.php?transaction_id=${encodeURIComponent(txnId)}`);
+  if (!data.success) { toast(data.error, 'error'); return; }
+
+  const h = data.header, rows = data.rows;
+  const totalQty = rows.reduce((s,r) => s + Number(r.quantity||0), 0);
+  const totalKg  = rows.reduce((s,r) => s + Number(r.quantity_kg||0), 0);
+
+  openModal(`Detail Transaksi — ${txnId}`, `
+    <div style="margin-bottom:14px;font-size:13px;line-height:1.7">
+      <div><strong>Tipe:</strong> <span class="badge ${BADGE_MAP[h.movement_type]||'badge-gray'}">${h.movement_type}</span>
+        ${h.is_cancelled ? '<span class="badge badge-red" style="margin-left:6px">DIBATALKAN</span>' : ''}</div>
+      <div><strong>Oleh:</strong> ${h.username} (${h.userid})</div>
+      <div><strong>Waktu:</strong> ${fDateTime(h.created_at)}</div>
+    </div>
+    <div class="table-wrap" style="border:none">
+      <table>
+        <thead><tr><th>Batch</th><th>Pallet</th><th>Qty</th><th>Kg</th><th>Dari</th><th>Ke</th><th>Bin</th><th>Remarks</th></tr></thead>
+        <tbody>
+          ${rows.map(r => `
+            <tr>
+              <td>${r.batch||'-'}</td>
+              <td class="mono">${r.pallet_number||'-'}</td>
+              <td class="mono">${r.quantity} ${r.uom||''}</td>
+              <td class="mono">${fNum(r.quantity_kg)} kg</td>
+              <td class="txt-muted">${r.source_location||'-'}</td>
+              <td class="txt-muted">${r.destination_location||'-'}</td>
+              <td class="mono txt-muted">${r.bin_location||'-'}</td>
+              <td class="mono txt-muted">${r.remarks||'-'}</td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+    <div style="margin-top:10px;font-size:12px;color:var(--text-muted)">
+      Total: <strong>${totalQty}</strong> CTN | <strong>${fNum(totalKg)}</strong> kg
+    </div>
+    <div class="form-actions" style="margin-top:18px">
+      <button class="btn btn-secondary" onclick="window.open('api/transaction_print.php?transaction_id=${encodeURIComponent(txnId)}','_blank')">
+        ${svgDownload()} Export PDF
+      </button>
+      ${data.can_cancel
+        ? `<button class="btn btn-danger" onclick="cancelTransaction('${txnId}')">Batalkan Transaksi</button>`
+        : (h.is_cancelled ? '<span class="badge badge-gray">Sudah dibatalkan</span>' : '')}
+      <button class="btn btn-secondary" onclick="closeModal()">Tutup</button>
+    </div>
+  `);
+};
+
+window.cancelTransaction = async (txnId) => {
+  if (!confirm(`Yakin membatalkan transaksi ${txnId}? Stok akan disesuaikan otomatis dan tidak dapat diulang.`)) return;
+  const res = await api('transaction_cancel.php', 'POST', { transaction_id: txnId });
+  if (res.success) {
+    toast(res.message, 'success');
+    closeModal();
+    movementsFetchData();
+  } else {
+    toast(res.error, 'error');
+  }
+};
 
 window.gotoMovements = (p) => { movPage = p; movementsFetchData(); };
 

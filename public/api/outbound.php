@@ -83,14 +83,14 @@ try {
         // Insert transaction
         $stmt = $pdo->prepare("
             INSERT INTO transactions
-                (transaction_id, movement_type, batch, quantity, uom, quantity_kg,
-                 source_location, destination_location, user_id, remarks, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, 'WH LSN', ?, ?, ?, NOW())
+                (transaction_id, movement_type, batch, pallet_number, quantity, uom, quantity_kg,
+                source_location, destination_location, bin_location, user_id, remarks, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 'WH LSN', ?, ?, ?, ?, NOW())
         ");
         $stmt->execute([
-            $txn_id, $movementType, $batch, $quantity, $uom, $removeKg,
+            $txn_id, $movementType, $batch, $pallet_number, $quantity, $uom, $removeKg,
             $isWHExternal ? 'Jasco' : $destination,
-            $user['id'], $remarks
+            $bin_location, $user['id'], $remarks
         ]);
 
         // Decrement source bin

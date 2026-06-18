@@ -69,12 +69,12 @@ try {
     // Insert transaction
     $stmt = $pdo->prepare("
         INSERT INTO transactions
-            (transaction_id, movement_type, batch, quantity, uom, quantity_kg,
-             source_location, destination_location, user_id, remarks, created_at)
-        VALUES (?, 'moving', ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+            (transaction_id, movement_type, batch, pallet_number, quantity, uom, quantity_kg,
+            source_location, destination_location, user_id, remarks, created_at)
+        VALUES (?, 'moving', ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
     ");
     $stmt->execute([
-        $txn_id, $batch, $quantity, $uom, $moveKg,
+        $txn_id, $batch, $pallet, $quantity, $uom, $moveKg,
         $source_bin, $dest_bin, $user['id'], $remarks
     ]);
 
