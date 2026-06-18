@@ -18,17 +18,27 @@ $limit  = 25;
 $offset = ($page - 1) * $limit;
 
 // ─── Filters ───────────────────────────────────────────────
-$fBatch  = sanitize($_GET['batch']         ?? '');
-$fPallet = sanitize($_GET['pallet_number'] ?? '');
-$fStatus = sanitize($_GET['status']        ?? ''); // 'checked' or 'unchecked'
+$fBatch     = sanitize($_GET['batch']         ?? '');
+$fDateFrom  = sanitize($_GET['date_from']     ?? ''); // format: 2024-01-15
+$fTimeFrom  = sanitize($_GET['time_from']     ?? ''); // format: 08:00
+$fDateTo    = sanitize($_GET['date_to']       ?? '');
+$fTimeTo    = sanitize($_GET['time_to']       ?? '');
 
 $conditions = ['1=1'];
 $params     = [];
 
-if ($fBatch)  { $conditions[] = 's.batch LIKE ?';          $params[] = "%$fBatch%"; }
-if ($fPallet) { $conditions[] = 's.pallet_number LIKE ?';  $params[] = "%$fPallet%"; }
-if ($fStatus === 'checked')   { $conditions[] = 's.qty_checked > 0'; }
-if ($fStatus === 'unchecked') { $conditions[] = 's.qty_checked = 0'; }
+if ($fBatch)  { $conditions[] = 's.batch LIKE ?'; $params[] = "%$fBatch%"; }
+
+if ($fDateFrom) {
+    $datetimeFrom = $fDateFrom . ' ' . ($fTimeFrom ?: '00:00') . ':00';
+    $conditions[] = 's.checked_at >= ?';
+    $params[]     = $datetimeFrom;
+}
+if ($fDateTo) {
+    $datetimeTo = $fDateTo . ' ' . ($fTimeTo ?: '23:59') . ':59';
+    $conditions[] = 's.checked_at <= ?';
+    $params[]     = $datetimeTo;
+}
 
 $where = 'WHERE ' . implode(' AND ', $conditions);
 
@@ -50,13 +60,16 @@ $data = $dataStmt->fetchAll();
 $sumStmt = $pdo->prepare("
     SELECT
         COUNT(*) AS total,
-        SUM(CASE WHEN qty_checked > 0 THEN 1 ELSE 0 END) AS checked,
-        SUM(CASE WHEN qty_checked = 0 THEN 1 ELSE 0 END) AS unchecked,
-        SUM(qty_soft) AS total_soft
+        SUM(qty_checked) AS total_checked_ctn,
+        SUM(qty_soft)    AS total_soft_ctn
     FROM softcase s $where
 ");
 $sumStmt->execute($params);
 $summary = $sumStmt->fetch();
+
+$totalChecked = (int)($summary['total_checked_ctn'] ?? 0);
+$totalSoft    = (int)($summary['total_soft_ctn'] ?? 0);
+$summary['soft_percentage'] = $totalChecked > 0 ? round(($totalSoft / $totalChecked) * 100, 2) : 0;
 
 jsonResponse([
     'success'    => true,

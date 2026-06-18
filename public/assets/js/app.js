@@ -1397,60 +1397,91 @@ window.gotoMovements = (p) => { movPage = p; movementsFetchData(); };
    ═══════════════════════════════════════════════════════════ */
 let scmFilters = {}, scmPage = 1;
 
+function scmGetFilters() {
+  return {
+    batch:         q('#fScBatch')?.value     || '',
+    pallet_number: q('#fScPallet')?.value    || '',
+    status:        q('#fScStatus')?.value    || '',
+    date_from:     q('#fScDateFrom')?.value  || '',
+    time_from:     q('#fScTimeFrom')?.value  || '',
+    date_to:       q('#fScDateTo')?.value    || '',
+    time_to:       q('#fScTimeTo')?.value    || '',
+  };
+}
+
 async function softcaseMonitoring(page = 1) {
   scmPage = page;
-  if (page === 1) setContent(`
-    <div class="panel">
-      <div class="filters-bar">
-        <div class="filter-field"><label>Batch</label><input class="filter-input" id="fScBatch" placeholder="Filter..."></div>
-        <div class="filter-field"><label>Pallet</label><input class="filter-input" id="fScPallet" placeholder="Filter..."></div>
-        <div class="filter-field"><label>Status</label>
-          <select class="filter-select" id="fScStatus" style="width:130px">
-            <option value="">Semua</option>
-            <option value="checked">Checked</option>
-            <option value="unchecked">Unchecked</option>
-          </select>
+  if (page === 1) {
+    setContent(`
+      <div class="panel">
+        <div class="filters-bar">
+          <div class="filter-field"><label>Batch</label><input class="filter-input" id="fScBatch" placeholder="Filter..."></div>
+          <div class="filter-field"><label>Dari Tanggal</label><input class="filter-input" id="fScDateFrom" type="date" style="width:140px"></div>
+          <div class="filter-field"><label>Jam</label><input class="filter-input" id="fScTimeFrom" type="time" style="width:100px"></div>
+          <div class="filter-field"><label>Sampai Tanggal</label><input class="filter-input" id="fScDateTo" type="date" style="width:140px"></div>
+          <div class="filter-field"><label>Jam</label><input class="filter-input" id="fScTimeTo" type="time" style="width:100px"></div>
+          <div class="filters-actions">
+            <button class="btn btn-ghost btn-sm" id="scmResetBtn">Reset</button>
+            <button class="btn btn-green btn-sm" id="scmExportBtn">${svgDownload()} Export</button>
+          </div>
         </div>
-        <div class="filters-actions">
-          <button class="btn btn-secondary btn-sm" id="scmFilterBtn">Filter</button>
-          <button class="btn btn-ghost btn-sm" id="scmResetBtn">Reset</button>
-          <button class="btn btn-green btn-sm" id="scmExportBtn">${svgDownload()} Export</button>
+        <div id="scmSummary" style="display:flex;gap:20px;padding:10px 16px;border-bottom:1px solid var(--border);font-size:12px;font-family:var(--font-mono);flex-wrap:wrap;"></div>
+        <div class="table-wrap" style="border:none;border-radius:0">
+          <table>
+            <thead><tr><th>Batch</th><th>Pallet</th><th>Qty Checked</th><th>UOM</th><th>Qty Soft</th><th>UOM Soft</th><th>Remarks</th><th>Terakhir Dicek</th></tr></thead>
+            <tbody id="scmBody"><tr class="empty-row"><td colspan="8">Memuat...</td></tr></tbody>
+          </table>
         </div>
+        <div id="scmPagination" style="padding:12px 16px"></div>
       </div>
-      <div id="scmSummary" style="display:flex;gap:20px;padding:10px 16px;border-bottom:1px solid var(--border);font-size:12px;font-family:var(--font-mono);flex-wrap:wrap;"></div>
-      <div class="table-wrap" style="border:none;border-radius:0">
-        <table>
-          <thead><tr><th>Batch</th><th>Pallet</th><th>Qty Checked</th><th>UOM</th><th>Qty Soft</th><th>UOM Soft</th><th>Remarks</th><th>Terakhir Dicek</th></tr></thead>
-          <tbody id="scmBody"><tr class="empty-row"><td colspan="9">Memuat...</td></tr></tbody>
-        </table>
-      </div>
-      <div id="scmPagination" style="padding:12px 16px"></div>
-    </div>
-  `);
+    `);
 
-  const getFilters = () => ({ batch: q('#fScBatch')?.value||'', pallet_number: q('#fScPallet')?.value||'', status: q('#fScStatus')?.value||'' });
+    q('#scmResetBtn')?.addEventListener('click', () => {
+      ['fScBatch','fScPallet','fScStatus','fScDateFrom','fScTimeFrom','fScDateTo','fScTimeTo']
+        .forEach(id => { const el = q(`#${id}`); if (el) el.value = ''; });
+      scmFilters = {};
+      scmPage    = 1;
+      scmFetchData();
+    });
 
-  q('#scmFilterBtn')?.addEventListener('click', () => { scmFilters = getFilters(); softcaseMonitoring(1); });
-  q('#scmResetBtn')?.addEventListener('click', () => {
-    scmFilters = {}; ['fScBatch','fScPallet','fScStatus'].forEach(id => { const el=q(`#${id}`); if(el) el.value=''; });
-    softcaseMonitoring(1);
-  });
-  q('#scmExportBtn')?.addEventListener('click', () => {
-    const p = new URLSearchParams({type:'softcase', ...getFilters()});
-    window.open(`api/export.php?${p}`, '_blank');
-  });
+    q('#scmExportBtn')?.addEventListener('click', () => {
+      const p = new URLSearchParams({type:'softcase', ...scmGetFilters()});
+      window.open(`api/export.php?${p}`, '_blank');
+    });
 
+    let scmTimer;
+    ['fScBatch','fScPallet','fScDateFrom','fScTimeFrom','fScDateTo','fScTimeTo'].forEach(id => {
+      q(`#${id}`)?.addEventListener('input', () => {
+        clearTimeout(scmTimer);
+        scmTimer = setTimeout(() => {
+          scmFilters = scmGetFilters();
+          scmPage    = 1;
+          scmFetchData();
+        }, 400);
+      });
+    });
+    q('#fScStatus')?.addEventListener('change', () => {
+      scmFilters = scmGetFilters();
+      scmPage    = 1;
+      scmFetchData();
+    });
+  }
+
+  await scmFetchData();
+}
+
+async function scmFetchData() {
   const params = new URLSearchParams({ page: scmPage, ...scmFilters });
   const data   = await api(`softcase_monitoring.php?${params}`, 'GET');
   if (!data.success) { showError(data.error); return; }
 
-  const sum = data.summary || {};
+  const sum   = data.summary || {};
   const sumEl = q('#scmSummary');
   if (sumEl) sumEl.innerHTML = `
-    <span style="color:var(--text)">Total: <strong>${sum.total||0}</strong></span>
-    <span style="color:var(--green)">Checked: <strong>${sum.checked||0}</strong></span>
-    <span style="color:var(--red)">Unchecked: <strong>${sum.unchecked||0}</strong></span>
-    <span style="color:var(--accent)">Total Soft: <strong>${sum.total_soft||0} CTN</strong></span>`;
+    <span style="color:var(--text)">Total Pallet: <strong>${sum.total||0}</strong></span>
+    <span style="color:var(--text)">Total Qty Checked: <strong>${sum.total_checked_ctn||0} CTN</strong></span>
+    <span style="color:var(--accent)">Total Qty Soft: <strong>${sum.total_soft_ctn||0} CTN</strong></span>
+    <span style="color:var(--yellow)">% Soft: <strong>${sum.soft_percentage||0}%</strong></span>`;
 
   q('#scmBody').innerHTML = data.data.length
     ? data.data.map(r => {
@@ -1462,16 +1493,16 @@ async function softcaseMonitoring(page = 1) {
           <td class="mono txt-muted">${r.uom_checked||'CTN'}</td>
           <td class="mono">${r.qty_soft||0}</td>
           <td class="mono txt-muted">${r.uom_soft||'CTN'}</td>
-          <td class="mono">${r.remarks||'-'}</td>
+          <td class="mono txt-muted">${r.remarks||'-'}</td>
           <td class="mono txt-muted">${fDateTime(r.checked_at)}</td>
         </tr>`;
       }).join('')
-    : '<tr class="empty-row"><td colspan="9">Tidak ada data</td></tr>';
+    : '<tr class="empty-row"><td colspan="8">Tidak ada data</td></tr>';
 
   q('#scmPagination').innerHTML = renderPagination(data.pagination, 'scm');
 }
 
-window.gotoScm = (p) => softcaseMonitoring(p);
+window.gotoScm = (p) => { scmPage = p; scmFetchData(); };
 
 /* ═══════════════════════════════════════════════════════════
    USERS

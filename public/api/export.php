@@ -117,17 +117,26 @@ function exportSoftcase(PDO $pdo): void {
     if (($_GET['status'] ?? '') === 'checked')   $conditions[] = 's.qty_checked > 0';
     if (($_GET['status'] ?? '') === 'unchecked') $conditions[] = 's.qty_checked = 0';
 
+    if (!empty($_GET['date_from'])) {
+        $conditions[] = 's.checked_at >= ?';
+        $params[]     = $_GET['date_from'] . ' ' . ($_GET['time_from'] ?: '00:00') . ':00';
+    }
+    if (!empty($_GET['date_to'])) {
+        $conditions[] = 's.checked_at <= ?';
+        $params[]     = $_GET['date_to'] . ' ' . ($_GET['time_to'] ?: '23:59') . ':59';
+    }
+
     $where = 'WHERE ' . implode(' AND ', $conditions);
     $stmt  = $pdo->prepare("
         SELECT s.batch, s.pallet_number, s.qty_checked, s.uom_checked,
-               s.qty_soft, s.uom_soft, s.remarks, s.checked_at
+               s.qty_soft, s.uom_soft, s.checked_at
         FROM softcase s $where
-        ORDER BY s.checked_at ASC
+        ORDER BY s.batch, s.pallet_number
     ");
     $stmt->execute($params);
-    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $rows = $stmt->fetchAll();
 
-    $headers = ['Batch','Pallet No','Qty Checked','UOM','Qty Soft','UOM Soft', 'Remarks','Checked At'];
+    $headers = ['Batch','Pallet No','Qty Checked','UOM','Qty Soft','UOM Soft','Checked At'];
     dispatchExport('Softcase Monitoring', $headers, $rows, 'softcase_'.date('Ymd_His'));
 }
 
