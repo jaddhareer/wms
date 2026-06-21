@@ -5,7 +5,7 @@
 'use strict';
 
 // ─── Constants ───────────────────────────────────────────────
-const PRODUCT_TYPES = ['500gr','5kg','10kg','25kg','11gr/2.64kg','11gr/3.3kg','11gr/5.5kg'];
+const PRODUCT_TYPES = ['500gr','5kg','10kg','25kg','CY','11gr/2.64kg','11gr/3.3kg','11gr/5.5kg'];
 const UOM_TYPES     = ['CTN','PCS','BAG'];
 const MOVE_TYPES    = { inbound:'Inbound', outbound:'Outbound', softcase:'Softcase', moving:'Moving' };
 const BADGE_MAP     = { inbound:'badge-green', outbound:'badge-red', softcase:'badge-amber', moving:'badge-blue' };
@@ -509,9 +509,25 @@ function inbound() {
       </div>
     </div>
   `);
+  
+  autoSelect();
 
   q('#ibBatch')?.addEventListener('input', function() {
     this.value = this.value.toUpperCase();
+    const code = this.value.slice(4, 6);
+    if(code === 'GV') {
+      q('#ibProductType').value = '500gr'
+    }else if(code === 'GF') {
+      q('#ibProductType').value = 'CY'
+    } else if(code === 'GB') {
+      q('#ibProductType').value = '10kg'
+    }else if(code === 'GC') {
+      q('#ibProductType').value = '25kg'
+    }else if(code === 'GA') {
+      q('#ibProductType').value = '5kg'
+    }else {
+      q('#ibProductType').value = ''
+    }
     if (this.value.length >= 10) q('#ibPallet')?.focus();
   });
   q('#ibPallet')?.addEventListener('input', function() {
@@ -524,8 +540,6 @@ function inbound() {
     this.value = this.value.toUpperCase();
     if (this.value.length >= 9) q('#ibAddBtn')?.focus();
   });
-
-  autoSelect();
 
   q('#ibBatch').addEventListener('input', ibAutoFill);
   
