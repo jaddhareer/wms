@@ -13,6 +13,7 @@ define('PRODUCT_KG_MAP', [
     '500gr'      => 10.0,
     '5kg'        => 10.0,
     '10kg'       => 10.0,
+    'CY'         => 10.0,
     '25kg'       => 25.0,
     '11gr/2.64kg'=> 2.64,
     '11gr/3.3kg' => 3.30,
@@ -41,6 +42,6 @@ define('ROLE_ACCESS', [
         'dashboard','inbound','outbound','moving','stock','movements','softcase-monitoring'
     ],
     'softchecker' => [
-        'dashboard','moving','softcase','softcase-monitoring'
+        'dashboard','softcase','softcase-monitoring'
     ],
 ]);

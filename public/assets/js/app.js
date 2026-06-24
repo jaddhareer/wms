@@ -1751,7 +1751,7 @@ const svgSpinner   = () => `<svg viewBox="0 0 24 24" fill="none" stroke="current
 
 function initBatchBinPopups() {
   const batchInputs       = ['#ibBatch','#obBatch','#scBatch','#mvBatch','#fStBatch','#fScBatch','#fMvBatch'];
-  const binInputs         = ['#ibBin','#obBin','#mvSrc','#mvDst','#fStBin','#scSourceBin'];
+  const binInputs         = ['#ibBin','#obBin','#mvSrc','#mvDst','#fStBin',];
 
   batchInputs.forEach(sel => {
     const el = q(sel);
