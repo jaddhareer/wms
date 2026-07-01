@@ -20,6 +20,18 @@ define('PRODUCT_KG_MAP', [
     '11gr/5.5kg' => 5.50,
 ]);
 
+// Product type → pcs per carton (untuk konversi UOM PCS)
+define('PRODUCT_PCS_MAP', [
+    '500gr'      => 20,
+    '5kg'        => 2,
+    '10kg'       => 1,
+    '25kg'       => 1,
+    'CY'         => 20,
+    '11gr/2.64kg'=> 240,
+    '11gr/3.3kg' => 300,
+    '11gr/5.5kg' => 500,
+]);
+
 // Transaction ID prefixes
 define('TXN_PREFIX', [
     'inbound'  => 'LSNIB',

@@ -26,7 +26,7 @@ if ($mode === 'detail' || $mode === 'export') {
 
     $where = 'WHERE ' . implode(' AND ', $conditions);
     $stmt  = $pdo->prepare("
-        SELECT batch, pallet_number, quantity, uom, quantity_kg,
+        SELECT batch, pallet_number, quantity, uom, quantity_kg, production_date,
                bin_location, location_type, updated_at
         FROM bin_locations $where
         ORDER BY batch, pallet_number
@@ -60,13 +60,14 @@ $dataStmt = $pdo->prepare("
         SUM(quantity)    AS total_qty,
         SUM(quantity_kg) AS total_kg,
         MAX(uom)         AS uom,
+        MAX(production_date)  AS production_date,
         MAX(location_type) AS location_type,
         COUNT(*)         AS pallet_count,
         MAX(updated_at)  AS updated_at
     FROM bin_locations
     $where
     GROUP BY batch
-    ORDER BY MAX(updated_at) DESC
+    ORDER BY batch DESC
     LIMIT $limit OFFSET $offset
 ");
 $dataStmt->execute($params);

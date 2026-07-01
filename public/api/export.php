@@ -30,6 +30,11 @@ use PhpOffice\PhpSpreadsheet\Style\Fill;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Border;
 
+function fmtDate(?string $dt): string {
+    if (!$dt) return '';
+    return date('d/m/Y H:i:s', strtotime($dt));
+}
+
 switch ($type) {
     case 'stock':
         requireModule('stock');
@@ -70,12 +75,17 @@ function exportStock(PDO $pdo): void {
     if (!empty($_GET['location_type'])) { $conditions[] = 'location_type LIKE ?'; $params[] = '%'.$_GET['location_type'].'%'; }
 
     $where = 'WHERE ' . implode(' AND ', $conditions);
-    $stmt  = $pdo->prepare("SELECT batch, pallet_number, quantity, uom, product_type, quantity_kg, bin_location, location_type, updated_at FROM bin_locations $where ORDER BY batch, pallet_number ASC");
+    $stmt = $pdo->prepare("
+        SELECT batch, pallet_number, quantity, uom, product_type, production_date, quantity_kg, bin_location, location_type, updated_at 
+        FROM bin_locations $where 
+        ORDER BY updated_at DESC");
     $stmt->execute($params);
-    $rows  = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $rows = $stmt->fetchAll();
 
-    $headers = ['Batch', 'Pallet No', 'Quantity', 'UOM', 'Product Type', 'Qty KG', 'Bin Location', 'Location Type', 'Updated At'];
-    dispatchExport('Stock Overview', $headers, $rows, 'stock_overview_'.date('Ymd_His'));
+    foreach ($rows as &$r) { $r['updated_at'] = fmtDate($r['updated_at']); $r['production_date'] = $r['production_date'] ? date('Y/m/d', strtotime($r['production_date'])) : ''; }
+
+    $headers = ['Batch','Pallet No','Quantity','UOM','Product Type','Production Date','Qty KG','Bin Location','Location Type','Updated At'];
+    buildXlsx('Stock Overview', $headers, $rows, 'stock_overview_'.date('Ymd_His'));
 }
 
 // ─── Movements Export ────────────────────────────────────────
@@ -101,10 +111,11 @@ function exportMovements(PDO $pdo): void {
         $where ORDER BY t.created_at ASC
     ");
     $stmt->execute($params);
-    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $rows = $stmt->fetchAll();
+    foreach ($rows as &$r) { $r['created_at'] = fmtDate($r['created_at']); }
 
     $headers = ['Transaction ID','Type','Batch','Qty','UOM','Qty KG','From','To','Remarks','Date','User'];
-    dispatchExport('Movements', $headers, $rows, 'movements_'.date('Ymd_His'));
+    buildXlsx('Movements', $headers, $rows, 'movements_'.date('Ymd_His'));
 }
 
 // ─── Softcase Export ─────────────────────────────────────────
@@ -127,17 +138,23 @@ function exportSoftcase(PDO $pdo): void {
     }
 
     $where = 'WHERE ' . implode(' AND ', $conditions);
-    $stmt  = $pdo->prepare("
+    $stmt = $pdo->prepare("
         SELECT s.batch, s.pallet_number, s.qty_checked, s.uom_checked,
-               s.qty_soft, s.uom_soft, s.checked_at
-        FROM softcase s $where
-        ORDER BY s.batch, s.pallet_number
+            s.qty_soft, s.uom_soft, s.remarks, b.production_date, s.checked_at
+        FROM softcase s
+        LEFT JOIN bin_locations b ON s.batch = b.batch AND s.pallet_number = b.pallet_number
+        $where
+        ORDER BY s.checked_at ASC
     ");
     $stmt->execute($params);
     $rows = $stmt->fetchAll();
+    foreach ($rows as &$r) {
+        $r['checked_at']      = fmtDate($r['checked_at']);
+        $r['production_date'] = $r['production_date'] ? date('Y/m/d', strtotime($r['production_date'])) : '';
+    }
 
-    $headers = ['Batch','Pallet No','Qty Checked','UOM','Qty Soft','UOM Soft','Checked At'];
-    dispatchExport('Softcase Monitoring', $headers, $rows, 'softcase_'.date('Ymd_His'));
+    $headers = ['Batch','Pallet No','Qty Checked','UOM','Qty Soft','UOM Soft','Remarks','Production Date','Checked At'];
+    buildXlsx('Softcase Monitoring', $headers, $rows, 'softcase_'.date('Ymd_His'));
 }
 
 // ─── XLSX Builder ────────────────────────────────────────────

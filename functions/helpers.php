@@ -32,6 +32,34 @@ function calcKg(string $productType, int $quantity): float {
     return round($rate * $quantity, 2);
 }
 
+/**
+ * Konversi input quantity+uom apapun → [quantity_ctn, quantity_kg]
+ */
+function convertToCtnKg(string $productType, string $uom, float $inputQty): array {
+    $kgPerCtn  = PRODUCT_KG_MAP[$productType] ?? 0;
+    $pcsPerCtn = PRODUCT_PCS_MAP[$productType] ?? 1;
+
+    switch (strtoupper($uom)) {
+        case 'CTN':
+        case 'BAG': // 25kg pakai BAG, 1 bag = 1 ctn
+            $ctn = $inputQty;
+            break;
+        case 'PCS':
+            $ctn = $pcsPerCtn > 0 ? $inputQty / $pcsPerCtn : 0;
+            break;
+        case 'KG':
+            $ctn = $kgPerCtn > 0 ? $inputQty / $kgPerCtn : 0;
+            break;
+        default:
+            $ctn = $inputQty;
+    }
+
+    $kg = round($ctn * $kgPerCtn, 4);
+    $ctn = round($ctn, 4);
+
+    return ['ctn' => $ctn, 'kg' => $kg];
+}
+
 function generateTxnId(string $type, PDO $pdo): string {
     $prefix = TXN_PREFIX[$type] ?? 'LSN';
     $mmyy   = date('my');

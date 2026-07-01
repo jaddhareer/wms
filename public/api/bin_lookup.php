@@ -15,7 +15,7 @@ $pallet = sanitize($_GET['pallet'] ?? '');
 if ($bin) {
     // Feature 5: autofill moving dari source bin
     $stmt = $pdo->prepare("
-        SELECT batch, pallet_number, quantity, uom, quantity_kg, bin_location, location_type
+        SELECT batch, pallet_number, quantity, uom, quantity_kg, bin_location, location_type, production_date
         FROM bin_locations
         WHERE bin_location = ? AND quantity > 0
         ORDER BY updated_at DESC
@@ -29,7 +29,7 @@ if ($bin) {
 if ($batch) {
     // Feature 7: autofill outbound dari batch + pallet
     $stmt = $pdo->prepare("
-        SELECT batch, pallet_number, quantity, uom, quantity_kg, bin_location, location_type
+        SELECT batch, pallet_number, quantity, uom, quantity_kg, bin_location, location_type, production_date
         FROM bin_locations
         WHERE batch = ? AND quantity > 0
         ORDER BY updated_at DESC

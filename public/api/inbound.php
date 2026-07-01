@@ -48,19 +48,27 @@ try {
     $movementType     = $isFromWHExternal ? 'moving' : 'inbound';
 
     foreach ($rows as $row) {
-        $batch         = sanitize($row['batch'] ?? '');
-        $pallet_number = palletFormat($row['pallet'] ?? '01');
-        $quantity      = (int)($row['quantity'] ?? 0);
-        $bin_location  = sanitize($row['bin_location'] ?? '');
+        $batch           = sanitize($row['batch'] ?? '');
+        $pallet_number   = palletFormat($row['pallet'] ?? '01');
+        $input_qty       = (float)($row['quantity'] ?? 0);
+        $row_uom         = sanitize($row['uom'] ?? $uom);
+        $bin_location    = sanitize($row['bin_location'] ?? '');
+        $production_date = sanitize($row['production_date'] ?? '');
 
-        if (!$batch || !$pallet_number || $quantity <= 0 || !$bin_location) {
+        if (!$batch || !$pallet_number || $input_qty <= 0 || !$bin_location) {
             $pdo->rollBack();
             jsonResponse(['success' => false, 'error' => "Data tidak lengkap pada baris: batch=$batch"]);
         }
+        if (!$production_date) {
+            $pdo->rollBack();
+            jsonResponse(['success' => false, 'error' => "Production date wajib diisi untuk batch=$batch"]);
+        }
 
-        $quantity_kg = calcKg($product_type, $quantity);
+        $converted   = convertToCtnKg($product_type, $row_uom, $input_qty);
+        $quantity    = $converted['ctn'];   // disimpan ke bin_locations (boleh desimal)
+        $quantity_kg = $converted['kg'];
 
-        // Insert transaction
+        // Insert transaction — sesuai input asli user
         $stmt = $pdo->prepare("
             INSERT INTO transactions
                 (transaction_id, movement_type, batch, pallet_number, quantity, uom, quantity_kg,
@@ -68,34 +76,33 @@ try {
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'WH LSN', ?, ?, ?, NOW())
         ");
         $stmt->execute([
-            $txn_id, $movementType, $batch, $pallet_number, $quantity, $uom, $quantity_kg,
+            $txn_id, $movementType, $batch, $pallet_number, $input_qty, $row_uom, $quantity_kg,
             $isFromWHExternal ? 'Jasco' : $inbound_from, $bin_location, $user['id'], $remarks
         ]);
 
-        // Upsert bin_locations
+        // Upsert bin_locations — pakai hasil konversi CTN
         $stmt2 = $pdo->prepare("
             INSERT INTO bin_locations
-                (batch, pallet_number, quantity, uom, product_type, quantity_kg, bin_location, location_type, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())
+                (batch, pallet_number, quantity, uom, product_type, production_date, quantity_kg, bin_location, location_type, updated_at)
+            VALUES (?, ?, ?, 'CTN', ?, ?, ?, ?, ?, NOW())
             ON DUPLICATE KEY UPDATE
                 quantity     = quantity + VALUES(quantity),
                 quantity_kg  = quantity_kg + VALUES(quantity_kg),
                 updated_at   = NOW()
         ");
         $stmt2->execute([
-            $batch, $pallet_number, $quantity, $uom, $product_type, $quantity_kg, $bin_location, $storage_location
+            $batch, $pallet_number, $quantity, $product_type, $production_date, $quantity_kg, $bin_location, $storage_location
         ]);
 
-        // Jika dari WH External: decrement bin Jasco
+        // Jika dari WH External: decrement bin Jasco (logic sama, ganti $quantity dengan hasil konversi)
         if ($isFromWHExternal) {
-            // Validasi stok di Jasco
             $checkJasco = $pdo->prepare("
                 SELECT quantity FROM bin_locations
                 WHERE batch = ? AND pallet_number = ? AND bin_location = 'Jasco'
                 FOR UPDATE
             ");
             $checkJasco->execute([$batch, $pallet_number]);
-            $jascoQty = (int)$checkJasco->fetchColumn();
+            $jascoQty = (float)$checkJasco->fetchColumn();
 
             if ($jascoQty < $quantity) {
                 $pdo->rollBack();
@@ -106,14 +113,13 @@ try {
                 UPDATE bin_locations
                 SET quantity    = quantity - ?,
                     quantity_kg = ROUND(quantity_kg - ?, 2),
-                    location_type = ?,
                     updated_at  = NOW()
                 WHERE batch = ? AND pallet_number = ? AND bin_location = 'Jasco'
             ");
-            $decrJasco->execute([$quantity, $quantity_kg, $storage_location, $batch, $pallet_number]);
+            $decrJasco->execute([$quantity, $quantity_kg, $batch, $pallet_number]);
         }
 
-        $results[] = ['batch' => $batch, 'pallet' => $pallet_number, 'qty' => $quantity];
+        $results[] = ['batch' => $batch, 'pallet' => $pallet_number, 'qty' => $input_qty, 'uom' => $row_uom];
     }
 
     $pdo->commit();

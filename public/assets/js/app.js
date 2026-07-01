@@ -6,10 +6,12 @@
 
 // ─── Constants ───────────────────────────────────────────────
 const PRODUCT_TYPES = ['500gr','5kg','10kg','25kg','CY','11gr/2.64kg','11gr/3.3kg','11gr/5.5kg'];
-const UOM_TYPES     = ['CTN','PCS','BAG'];
+const UOM_TYPES     = ['CTN','PCS','KG','BAG'];
 const MOVE_TYPES    = { inbound:'Inbound', outbound:'Outbound', softcase:'Softcase', moving:'Moving' };
 const BADGE_MAP     = { inbound:'badge-green', outbound:'badge-red', softcase:'badge-amber', moving:'badge-blue' };
 const API           = (p) => `../public/api/${p}`;
+const KG_PER_CTN    = { '500gr':10,'5kg':10,'10kg':10,'25kg':25,'CY':10,'11gr/2.64kg':2.64,'11gr/3.3kg':3.3,'11gr/5.5kg':5.5 };
+const PCS_PER_CTN   = { '500gr':20,'5kg':2,'10kg':1,'25kg':1,'CY':1,'11gr/2.64kg':240,'11gr/3.3kg':300,'11gr/5.5kg':500 };
 
 // ─── State ───────────────────────────────────────────────────
 const state = {
@@ -464,6 +466,10 @@ function inbound() {
             <div class="field-group"><label class="field-label">Product Type *</label>
               <select id="ibProductType" class="field-select"><option value="">-- Pilih --</option>${PRODUCT_TYPES.map(p=>`<option>${p}</option>`).join('')}</select>
             </div>
+            <div class="field-group">
+              <label class="field-label">Production Date *</label>
+              <input id="ibProdDate" class="field-input" type="date">
+            </div>
             <div class="field-group"><label class="field-label">UOM</label>
               <select id="ibUom" class="field-select">${UOM_TYPES.map(u=>`<option>${u}</option>`).join('')}</select>
             </div>
@@ -473,6 +479,10 @@ function inbound() {
             <div class="field-group"><label class="field-label">Batch *</label><input id="ibBatch" class="field-input" placeholder="Batch number"></div>
             <div class="field-group"><label class="field-label">Pallet No *</label><input id="ibPallet" class="field-input" placeholder="01" maxlength="3"></div>
             <div class="field-group"><label class="field-label">Quantity *</label><input id="ibQty" class="field-input" type="number" min="1" placeholder="0"></div>
+            <div class="field-group">
+              <label class="field-label">Qty KG (Preview)</label>
+              <input id="ibQtyKgPreview" class="field-input" readonly style="background:var(--surface-2);color:var(--text-muted)" placeholder="0.00 kg">
+            </div>
             <div class="field-group"><label class="field-label">Bin Location *</label><input id="ibBin" class="field-input" placeholder="A-01-A-01"></div>
           </div>
           <div class="field-group"><label class="field-label">Remarks</label><input id="ibRemarks" class="field-input" placeholder="Opsional"></div>
@@ -493,7 +503,7 @@ function inbound() {
           <div id="ibSummary" class="temp-summary hidden" style="margin:12px"></div>
           <div class="table-wrap" style="border:none;border-radius:0">
             <table>
-              <thead><tr><th>#</th><th>Batch</th><th>Type</th><th>Pallet</th><th>Qty</th><th>Bin</th><th></th></tr></thead>
+              <thead><tr><th>#</th><th>Batch</th><th>Type</th><th>Pallet</th><th>Qty</th><th>UOM</th><th>Bin</th><th>Prod Date</th><th></th></tr></thead>
               <tbody id="ibTableBody"><tr class="empty-row"><td colspan="6">Tambahkan baris terlebih dahulu</td></tr></tbody>
             </table>
           </div>
@@ -512,21 +522,34 @@ function inbound() {
   
   autoSelect();
 
+  // beberapa bantuan untuk input agar tidak manual semua
   q('#ibBatch')?.addEventListener('input', function() {
     this.value = this.value.toUpperCase();
     const code = this.value.slice(4, 6);
     if(code === 'GV') {
-      q('#ibProductType').value = '500gr'
+      q('#ibProductType').value = '500gr';
+      q('#ibUom').value = 'CTN';
+      q('#ibStorage').value = 'LSN Ambient';
     }else if(code === 'GF') {
-      q('#ibProductType').value = 'CY'
+      q('#ibProductType').value = 'CY';
+      q('#ibUom').value = 'CTN';
+      q('#ibStorage').value = 'LSN Chiller';
     } else if(code === 'GB') {
-      q('#ibProductType').value = '10kg'
+      q('#ibProductType').value = '10kg';
+      q('#ibUom').value = 'CTN';
+      q('#ibStorage').value = 'LSN Ambient';
     }else if(code === 'GC') {
-      q('#ibProductType').value = '25kg'
+      q('#ibProductType').value = '25kg';
+      q('#ibUom').value = 'BAG';
+      q('#ibStorage').value = 'LSN Ambient';
     }else if(code === 'GA') {
-      q('#ibProductType').value = '5kg'
+      q('#ibProductType').value = '5kg';
+      q('#ibUom').value = 'CTN';
+      q('#ibStorage').value = 'LSN Ambient';
     }else {
       q('#ibProductType').value = ''
+      q('#ibUom').value = 'CTN';
+      q('#ibStorage').value = 'LSN Ambient';
     }
     if (this.value.length >= 10) q('#ibPallet')?.focus();
   });
@@ -534,14 +557,29 @@ function inbound() {
     if (this.value.length >= 2) q('#ibQty')?.focus();
   });
   q('#ibQty')?.addEventListener('input', function() {
-    if (this.value.toString().length >= 2) q('#ibBin')?.focus();
+    const uomm = q('#ibUom').value;
+    const isCarton = uomm === 'CTN' || uomm === 'BAG';
+    if (this.value.toString().length >= 2 && isCarton) q('#ibBin')?.focus();
   });
   q('#ibBin')?.addEventListener('input', function() {
     this.value = this.value.toUpperCase();
     if (this.value.length >= 9) q('#ibAddBtn')?.focus();
   });
 
+  // kalkulasi dan autofill
+  q('#ibQty')?.addEventListener('input', ibUpdateKgPreview);
+  q('#ibUom')?.addEventListener('change', ibUpdateKgPreview);
+  q('#ibProductType')?.addEventListener('change', ibUpdateKgPreview);
   q('#ibBatch').addEventListener('input', ibAutoFill);
+
+  function ibUpdateKgPreview() {
+    const pt  = q('#ibProductType').value;
+    const uom = q('#ibUom').value;
+    const qty = parseFloat(q('#ibQty').value) || 0;
+    if (!pt || qty <= 0) { q('#ibQtyKgPreview').value = ''; return; }
+    const r = convertQtyJs(pt, uom, qty);
+    q('#ibQtyKgPreview').value = `${fNum(r.kg)} kg (${fNum(r.ctn)} CTN)`;
+  }
   
   async function ibAutoFill() {
     const isFromExt = q('#ibFrom').value === 'WH External';
@@ -550,7 +588,6 @@ function inbound() {
     const batch = q('#ibBatch')?.value.trim();
     const location = 'Jasco';
     const data = await api(`check_jasco.php?batch=${encodeURIComponent(batch)}&bin_location=${encodeURIComponent(location)}`);
-
     if(!data.success || !data.data.length) return;
     const jascoStock = data.data;
     if(jascoStock.length === 1) {
@@ -576,6 +613,7 @@ function inbound() {
       </div>
     `);
     }
+    
   }
   window.ibFillBin = (pallet, bin, qty, e) => {
   e.preventDefault();
@@ -623,9 +661,29 @@ async function ibAddRow() {
     return;
   }
 
+  // Cek apakah batch sudah punya production_date tersimpan
+  let productionDate = q('#ibProdDate').value;
+  const checkPD = await api(`bin_lookup.php?batch=${encodeURIComponent(batch)}`);
+  if (checkPD.success && checkPD.data.length > 0 && checkPD.data[0].production_date) {
+    productionDate = checkPD.data[0].production_date;
+    q('#ibProdDate').value = productionDate; // sync ke form
+  }
+
+  if (!productionDate) {
+    toast('Production Date wajib diisi', 'warning');
+    q('#ibProdDate').focus();
+    return;
+  }
+
   const finalBin = bin || 'STAGE';
 
-  state.inboundRows.push({ batch, ptype, pallet, quantity: qty, bin_location: finalBin });
+  state.inboundRows.push({
+    batch, ptype, pallet,
+    quantity: qty,
+    uom: q('#ibUom').value,
+    bin_location: finalBin,
+    production_date: productionDate
+  });
   ibRenderTable();
 
   // Reset per-row fields, focus back to pallet
@@ -663,7 +721,9 @@ function ibRenderTable() {
       <td class="mono">${r.ptype}</td>
       <td class="mono">${r.pallet}</td>
       <td class="mono">${r.quantity}</td>
+      <td class="mono">${r.uom}</td>
       <td class="mono">${r.bin_location}</td>
+      <td class="mono">${r.production_date}</td>
       <td>
         <button class="btn btn-ghost btn-sm" onclick="ibDeleteRow(${i})" title="Hapus">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg>
@@ -1134,7 +1194,7 @@ async function stock(page = 1) {
       <div id="stSummaryBar" style="padding:10px 16px;font-size:12px;color:var(--text-muted);border-bottom:1px solid var(--border);font-family:var(--font-mono)"></div>
       <div class="table-wrap" style="border:none;border-radius:0">
         <table>
-          <thead><tr><th>#</th><th>Batch</th><th>Pallet</th><th>Qty</th><th>UOM</th><th>Weight</th><th>Sloc</th><th>Updated</th></tr></thead>
+          <thead><tr><th>#</th><th>Batch</th><th>Pallet</th><th>Qty</th><th>UOM</th><th>Weight</th><th>Prod. Date</th><th>Sloc</th><th>Updated</th></tr></thead>
           <tbody id="stBody"><tr class="empty-row"><td colspan="8">Memuat...</td></tr></tbody>
         </table>
       </div>
@@ -1180,7 +1240,7 @@ async function stockFetchData() {
 
   const offset = (stockPage - 1) * 50;
   const sumBar = q('#stSummaryBar');
-  if (sumBar) sumBar.textContent = `Menampilkan ${data.data.length} dari ${data.pagination.total} batch | Total Qty: ${data.summary?.total_qty||0} CTN`;
+  if (sumBar) sumBar.textContent = `Menampilkan ${data.data.length} dari ${data.pagination.total} batch | Total Qty: ${fNum(data.summary?.total_qty||0)} CTN`;
 
   q('#stBody').innerHTML = data.data.length
     ? data.data.map((r,i) => `
@@ -1188,9 +1248,10 @@ async function stockFetchData() {
           <td class="mono txt-muted">${offset+i+1}</td>
           <td><strong>${r.batch}</strong></td>
           <td class="mono">${r.pallet_count} pallet</td>
-          <td class="mono"><strong>${r.total_qty}</strong></td>
+          <td class="mono"><strong>${fNum(r.total_qty)}</strong></td>
           <td class="mono txt-muted">${r.uom||'CTN'}</td>
           <td class="mono">${fNum(r.total_kg)} kg</td>
+          <td class="mono txt-muted">${r.production_date}</td>
           <td>${r.location_type ? `<span class="badge badge-gray">${r.location_type}</span>` : '-'}</td>
           <td class="mono txt-muted">${fDateTime(r.updated_at)}</td>
         </tr>`).join('')
@@ -1211,7 +1272,7 @@ window.stockShowBins = async (batch) => {
             ? data.data.map(r => `
               <tr>
                 <td class="mono">${r.pallet_number}</td>
-                <td class="mono"><strong>${r.quantity}</strong></td>
+                <td class="mono"><strong>${fNum(r.quantity)}</strong></td>
                 <td class="mono txt-muted">${r.uom||'-'}</td>
                 <td class="mono">${fNum(r.quantity_kg)} kg</td>
                 <td class="mono">${r.bin_location}</td>
@@ -1331,7 +1392,7 @@ async function movementsFetchData() {
           <td class="mono" style="font-size:11px">${r.transaction_id}</td>
           <td><span class="badge ${BADGE_MAP[r.movement_type]||'badge-gray'}">${r.movement_type}</span></td>
           <td>${r.batch||'-'}</td>
-          <td class="mono">${r.quantity||0} ${r.uom||''}</td>
+          <td class="mono">${fNum(r.quantity)||0} ${r.uom||''}</td>
           <td class="mono">${fNum(r.quantity_kg)} kg</td>
           <td class="txt-muted">${r.source_location||'-'}</td>
           <td class="txt-muted">${r.destination_location||'-'}</td>
@@ -1367,7 +1428,7 @@ window.showTxnDetail = async (txnId) => {
             <tr>
               <td>${r.batch||'-'}</td>
               <td class="mono">${r.pallet_number||'-'}</td>
-              <td class="mono">${r.quantity} ${r.uom||''}</td>
+              <td class="mono">${fNum(r.quantity)} ${r.uom||''}</td>
               <td class="mono">${fNum(r.quantity_kg)} kg</td>
               <td class="txt-muted">${r.source_location||'-'}</td>
               <td class="mono txt-muted">${r.bin_location||'-'}</td>
@@ -1378,7 +1439,7 @@ window.showTxnDetail = async (txnId) => {
       </table>
     </div>
     <div style="margin-top:10px;font-size:12px;color:var(--text-muted)">
-      Total: <strong>${totalQty}</strong> CTN | <strong>${fNum(totalKg)}</strong> kg
+      Total: <strong>${fNum(totalQty)}</strong> CTN | <strong>${fNum(totalKg)}</strong> kg
     </div>
     <div class="form-actions" style="margin-top:18px">
       <button class="btn btn-secondary" onclick="window.open('api/transaction_print.php?transaction_id=${encodeURIComponent(txnId)}','_blank')">
@@ -1683,7 +1744,11 @@ function autoSelect() {
   });
 }
 
-function fNum(n) { return n ? parseFloat(n).toFixed(2) : '0.00'; }
+function fNum(n) {
+  if(!n) return '0';
+  const num = parseFloat(n);
+  return num % 1 === 0 ? num.toString() : num.toFixed(2).replace(/0+$/,'').replace(/\.$/,'');
+}
 function fDateTime(dt) {
   if (!dt) return '-';
   const d = new Date(dt);
@@ -1703,6 +1768,20 @@ function renderPagination(p, scope) {
   html += `<button class="page-btn" onclick="${fn}(${p.page+1})" ${p.page>=p.totalPages?'disabled':''}>›</button>`;
   html += `<span class="page-info">${p.page} / ${p.totalPages} (${p.total} records)</span>`;
   return html + '</div>';
+}
+
+function convertQtyJs(productType, uom, inputQty) {
+  const kgPerCtn  = KG_PER_CTN[productType] || 0;
+  const pcsPerCtn = PCS_PER_CTN[productType] || 1;
+  let ctn;
+  switch ((uom||'').toUpperCase()) {
+    case 'PCS': ctn = pcsPerCtn > 0 ? inputQty / pcsPerCtn : 0; break;
+    case 'KG':  ctn = kgPerCtn  > 0 ? inputQty / kgPerCtn  : 0; break;
+    case 'CTN':
+    case 'BAG':
+    default:    ctn = inputQty;
+  }
+  return { ctn: +ctn.toFixed(4), kg: +(ctn * kgPerCtn).toFixed(2) };
 }
 
 // ─── Toast ───────────────────────────────────────────────────

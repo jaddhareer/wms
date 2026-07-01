@@ -44,7 +44,7 @@ try {
     foreach ($rows as $row) {
         $batch         = sanitize($row['batch'] ?? '');
         $pallet_number = palletFormat($row['pallet'] ?? '01');
-        $quantity      = (int)($row['quantity'] ?? 0);
+        $quantity      = (float)($row['quantity'] ?? 0);
         $bin_location  = sanitize($row['bin_location'] ?? '');
 
         if (!$batch || !$pallet_number || $quantity <= 0 || !$bin_location) {
@@ -59,26 +59,25 @@ try {
             FOR UPDATE
         ");
         $checkStmt->execute([$batch, $pallet_number, $bin_location]);
-        $binData   = $checkStmt->fetch();
+        $binData = $checkStmt->fetch();
 
         if (!$binData) {
             $pdo->rollBack();
             jsonResponse(['success' => false, 'error' => "Bin tidak ditemukan: batch=$batch pallet=$pallet_number bin=$bin_location"]);
         }
 
-        $uom       = $binData['uom'] ?: 'CTN';
-        $current   = (int)$binData['quantity'];
-        $productType = $binData['product_type'];
+        $row_uom    = sanitize($row['uom'] ?? 'CTN');
+        $input_qty  = (float)($row['quantity'] ?? 0);
+        $converted  = convertToCtnKg($binData['product_type'] ?? '', $row_uom, $input_qty);
+        $removeQty  = $converted['ctn']; // dipakai untuk decrement bin_locations
+        $removeKg   = $converted['kg'];
+        $uom        = $binData['uom'] ?: 'CTN';
+        $current    = (float)$binData['quantity'];
 
-        if ($current < $quantity) {
+        if ($current < $removeQty) {
             $pdo->rollBack();
-            jsonResponse([
-                'success' => false,
-                'error'   => "Stok tidak mencukupi untuk batch=$batch pallet=$pallet_number di bin=$bin_location. Tersedia: $current, diminta: $quantity"
-            ]);
+            jsonResponse(['success' => false, 'error' => "Stok tidak mencukupi untuk batch=$batch pallet=$pallet_number di bin=$bin_location. Tersedia: $current CTN, diminta: $removeQty CTN"]);
         }
-
-        $removeKg = calcKg($productType ?? '', $quantity);
 
         // Insert transaction
         $stmt = $pdo->prepare("
@@ -88,12 +87,10 @@ try {
             VALUES (?, ?, ?, ?, ?, ?, ?, 'WH LSN', ?, ?, ?, ?, NOW())
         ");
         $stmt->execute([
-            $txn_id, $movementType, $batch, $pallet_number, $quantity, $uom, $removeKg,
-            $isWHExternal ? 'Jasco' : $destination,
-            $bin_location, $user['id'], $remarks
+            $txn_id, $movementType, $batch, $pallet_number, $input_qty, $row_uom, $removeKg,
+            $isWHExternal ? 'Jasco' : $destination, $bin_location, $user['id'], $remarks
         ]);
 
-        // Decrement source bin
         $stmt2 = $pdo->prepare("
             UPDATE bin_locations
             SET quantity    = quantity - ?,
@@ -101,7 +98,7 @@ try {
                 updated_at  = NOW()
             WHERE batch = ? AND pallet_number = ? AND bin_location = ?
         ");
-        $stmt2->execute([$quantity, $removeKg, $batch, $pallet_number, $bin_location]);
+        $stmt2->execute([$removeQty, $removeKg, $batch, $pallet_number, $bin_location]);
 
         // Jika WH External: upsert ke bin Jasco
         if ($isWHExternal) {
@@ -114,10 +111,10 @@ try {
                     quantity_kg = ROUND(quantity_kg + ?, 2),
                     updated_at  = NOW()
             ");
-            $incrStmt->execute([$batch, $pallet_number, $quantity, $uom, $productType, $removeKg, $quantity, $removeKg]);
+            $incrStmt->execute([$batch, $pallet_number, $removeQty, $uom, $productType, $removeKg, $removeQty, $removeKg]);
         }
 
-        $results[] = ['batch' => $batch, 'pallet' => $pallet_number, 'qty' => $quantity];
+        $results[] = ['batch' => $batch, 'pallet' => $pallet_number, 'qty' => $removeQty];
 
     }
 
