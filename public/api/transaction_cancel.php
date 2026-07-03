@@ -14,7 +14,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 }
 
 $me = currentUser();
-if (!in_array($me['role'], ['admin','supervisor', 'staff'])) {
+if (!in_array($me['role'], ['admin','supervisor'])) {
     jsonResponse(['success' => false, 'error' => 'Anda tidak memiliki izin untuk membatalkan transaksi'], 403);
 }
 
@@ -53,7 +53,7 @@ try {
     foreach ($rows as $r) {
         $batch   = $r['batch'];
         $pallet  = $r['pallet_number'];
-        $qty     = (int)$r['quantity'];
+        $qty     = (float)$r['quantity'];
         $qtyKg   = (float)$r['quantity_kg'];
 
         if ($originalType === 'inbound') {
@@ -63,7 +63,7 @@ try {
             }
             $check = $pdo->prepare("SELECT quantity FROM bin_locations WHERE batch=? AND pallet_number=? AND bin_location=? FOR UPDATE");
             $check->execute([$batch, $pallet, $r['bin_location']]);
-            $current = (int)$check->fetchColumn();
+            $current = (float)$check->fetchColumn();
             if ($current < $qty) {
                 $pdo->rollBack();
                 jsonResponse(['success' => false, 'error' => "Stok batch $batch pallet $pallet sudah berkurang ({$current} < {$qty}), tidak dapat dibatalkan"]);
@@ -85,15 +85,28 @@ try {
                 $pdo->rollBack();
                 jsonResponse(['success' => false, 'error' => "Data lama tanpa bin/pallet, batch $batch tidak dapat dibatalkan otomatis"]);
             }
-            $upd = $pdo->prepare("
-                INSERT INTO bin_locations (batch, pallet_number, quantity, uom, quantity_kg, bin_location, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, NOW())
-                ON DUPLICATE KEY UPDATE
-                    quantity = quantity + VALUES(quantity),
-                    quantity_kg = ROUND(quantity_kg + VALUES(quantity_kg), 2),
-                    updated_at = NOW()
+            
+            $binMeta = $pdo->prepare("
+                SELECT product_type, production_date
+                FROM bin_locations
+                WHERE batch = ? AND pallet_number = ?
+                LIMIT 1
             ");
-            $upd->execute([$batch, $pallet, $qty, $r['uom'], $qtyKg, $r['bin_location']]);
+            $binMeta->execute([$batch, $pallet]);
+            $meta = $binMeta->fetch();
+            $productType    = $meta['product_type'];
+            $productionDate = $meta['production_date'];
+            
+            $upd = $pdo->prepare("
+                INSERT INTO bin_locations
+                    (batch, pallet_number, quantity, uom, product_type, production_date, quantity_kg, bin_location, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())
+                ON DUPLICATE KEY UPDATE
+                    quantity        = quantity + VALUES(quantity),
+                    quantity_kg     = ROUND(quantity_kg + VALUES(quantity_kg), 2),
+                    updated_at      = NOW()
+            ");
+            $upd->execute([$batch, $pallet, $qty, $r['uom'], $productType, $productionDate, $qtyKg, $r['bin_location']]);
 
             $ins = $pdo->prepare("
                 INSERT INTO transactions
@@ -108,34 +121,65 @@ try {
                 $pdo->rollBack();
                 jsonResponse(['success' => false, 'error' => "Data lama tanpa pallet, batch $batch tidak dapat dibatalkan otomatis"]);
             }
-            $srcBin = $r['source_location'];
-            $dstBin = $r['destination_location'];
+            $srcBin      = $r['source_location'];
+            $dstBin      = $r['destination_location'];
+            $binLocation = $r['bin_location'] ?? null;
+            
+            $binMeta = $pdo->prepare("
+                SELECT product_type, production_date, location_type
+                FROM bin_locations
+                WHERE batch = ? AND pallet_number = ?
+                LIMIT 1
+            ");
+            $binMeta->execute([$batch, $pallet]);
+            $meta           = $binMeta->fetch();
+            $productType    = $meta['product_type']    ?? null;
+            $productionDate = $meta['production_date'] ?? null;
+            $locationType   = $meta['location_type']   ?? null;
+            
+            // Jika ini cancel dari outbound WH External (moving ke Jasco)
+            // maka kembalikan ke bin_location asli, bukan ke source_location (WH LSN)
+            $returnToBin = ($dstBin === 'Jasco' && $binLocation) ? $binLocation : $srcBin;
 
             $check = $pdo->prepare("SELECT quantity FROM bin_locations WHERE batch=? AND pallet_number=? AND bin_location=? FOR UPDATE");
             $check->execute([$batch, $pallet, $dstBin]);
-            $current = (int)$check->fetchColumn();
+            $current = (float)$check->fetchColumn();
             if ($current < $qty) {
                 $pdo->rollBack();
                 jsonResponse(['success' => false, 'error' => "Stok di $dstBin sudah berkurang, tidak dapat dibatalkan"]);
             }
-
-            $decr = $pdo->prepare("UPDATE bin_locations SET quantity=quantity-?, updated_at=NOW() WHERE batch=? AND pallet_number=? AND bin_location=?");
-            $decr->execute([$qty, $batch, $pallet, $dstBin]);
+            
+            $decr = $pdo->prepare("
+                UPDATE bin_locations
+                SET quantity    = quantity - ?,
+                    quantity_kg = ROUND(quantity_kg - ?, 2),
+                    updated_at  = NOW()
+                WHERE batch = ? AND pallet_number = ? AND bin_location = ?
+            ");
+            $decr->execute([$qty, $qtyKg, $batch, $pallet, $dstBin]);
 
             $incr = $pdo->prepare("
-                INSERT INTO bin_locations (batch, pallet_number, quantity, uom, bin_location, updated_at)
-                VALUES (?, ?, ?, ?, ?, NOW())
-                ON DUPLICATE KEY UPDATE quantity = quantity + VALUES(quantity), updated_at = NOW()
+                INSERT INTO bin_locations
+                    (batch, pallet_number, quantity, uom, product_type, production_date, quantity_kg, bin_location, location_type, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+                ON DUPLICATE KEY UPDATE
+                    quantity    = quantity + VALUES(quantity),
+                    quantity_kg = ROUND(quantity_kg + VALUES(quantity_kg), 2),
+                    updated_at  = NOW()
             ");
-            $incr->execute([$batch, $pallet, $qty, $r['uom'], $srcBin]);
+            $incr->execute([$batch, $pallet, $qty, $r['uom'], $productType, $productionDate, $qtyKg, $returnToBin, $locationType]);
 
             $ins = $pdo->prepare("
                 INSERT INTO transactions
                     (transaction_id, movement_type, batch, pallet_number, quantity, uom, quantity_kg,
-                     source_location, destination_location, user_id, remarks, created_at)
-                VALUES (?, 'moving', ?, ?, ?, ?, 0, ?, ?, ?, ?, NOW())
+                     source_location, destination_location, bin_location, user_id, remarks, created_at)
+                VALUES (?, 'moving', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
             ");
-            $ins->execute([$newTxnId, $batch, $pallet, $qty, $r['uom'], $dstBin, $srcBin, $me['id'], "Pembatalan TXN: $txn_id"]);
+            $ins->execute([
+                $newTxnId, $batch, $pallet, $qty, $r['uom'], $qtyKg,
+                $dstBin, $returnToBin, $binLocation,
+                $me['id'], "Pembatalan TXN: $txn_id"
+            ]);
         }
     }
 

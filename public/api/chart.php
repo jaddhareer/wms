@@ -22,16 +22,16 @@ switch ($mode) {
         $dateTo   = date('Y-m-d', strtotime($dateFrom . ' +6 days'));
 
         $stmtIn = $pdo->prepare("
-            SELECT DATE(created_at) AS p, SUM(quantity) AS total
+            SELECT DATE(created_at) AS p, SUM(quantity_kg) AS total
             FROM transactions
-            WHERE movement_type = 'inbound' AND source_location = 'Production'
+            WHERE movement_type = 'inbound'
               AND DATE(created_at) BETWEEN ? AND ?
             GROUP BY p ORDER BY p
         ");
         $stmtIn->execute([$dateFrom, $dateTo]);
 
         $stmtOut = $pdo->prepare("
-            SELECT DATE(created_at) AS p, SUM(quantity) AS total
+            SELECT DATE(created_at) AS p, SUM(quantity_kg) AS total
             FROM transactions
             WHERE movement_type = 'outbound' AND $custDest
               AND DATE(created_at) BETWEEN ? AND ?
@@ -43,7 +43,7 @@ switch ($mode) {
         foreach ($stmtIn->fetchAll()  as $r) $inMap[$r['p']]  = (int)$r['total'];
         foreach ($stmtOut->fetchAll() as $r) $outMap[$r['p']] = (int)$r['total'];
 
-        for ($i = 0; $i <= 7; $i++) {
+        for ($i = 0; $i <= 6; $i++) {
             $d          = date('Y-m-d', strtotime($dateFrom . " +$i days"));
             $labels[]   = date('d/m', strtotime($d));
             $inbound[]  = $inMap[$d]  ?? 0;
@@ -59,16 +59,16 @@ switch ($mode) {
         $dateTo    = date('Y-m-t', strtotime($monthTo . '-01'));
 
         $stmtIn = $pdo->prepare("
-            SELECT YEARWEEK(created_at, 1) AS p, SUM(quantity) AS total
+            SELECT YEARWEEK(created_at, 1) AS p, SUM(quantity_kg) AS total
             FROM transactions
-            WHERE movement_type = 'inbound' AND source_location = 'Production'
+            WHERE movement_type = 'inbound'
             AND DATE(created_at) BETWEEN ? AND ?
             GROUP BY p ORDER BY p
         ");
         $stmtIn->execute([$dateFrom, $dateTo]);
 
         $stmtOut = $pdo->prepare("
-            SELECT YEARWEEK(created_at, 1) AS p, SUM(quantity) AS total
+            SELECT YEARWEEK(created_at, 1) AS p, SUM(quantity_kg) AS total
             FROM transactions
             WHERE movement_type = 'outbound' AND $custDest
             AND DATE(created_at) BETWEEN ? AND ?
@@ -102,16 +102,16 @@ switch ($mode) {
         $dateTo    = date('Y-m-t', strtotime($monthTo . '-01'));
 
         $stmtIn = $pdo->prepare("
-            SELECT DATE_FORMAT(created_at, '%Y-%m') AS p, SUM(quantity) AS total
+            SELECT DATE_FORMAT(created_at, '%Y-%m') AS p, SUM(quantity_kg) AS total
             FROM transactions
-            WHERE movement_type = 'inbound' AND source_location = 'Production'
+            WHERE movement_type = 'inbound'
               AND DATE(created_at) BETWEEN ? AND ?
             GROUP BY p ORDER BY p
         ");
         $stmtIn->execute([$dateFrom, $dateTo]);
 
         $stmtOut = $pdo->prepare("
-            SELECT DATE_FORMAT(created_at, '%Y-%m') AS p, SUM(quantity) AS total
+            SELECT DATE_FORMAT(created_at, '%Y-%m') AS p, SUM(quantity_kg) AS total
             FROM transactions
             WHERE movement_type = 'outbound' AND $custDest
               AND DATE(created_at) BETWEEN ? AND ?
@@ -141,16 +141,16 @@ switch ($mode) {
         if ($yearTo - $yearFrom > 9) $yearFrom = $yearTo - 9;
 
         $stmtIn = $pdo->prepare("
-            SELECT YEAR(created_at) AS p, SUM(quantity) AS total
+            SELECT YEAR(created_at) AS p, SUM(quantity_kg) AS total
             FROM transactions
-            WHERE movement_type = 'inbound' AND source_location = 'Production'
+            WHERE movement_type = 'inbound'
               AND YEAR(created_at) BETWEEN ? AND ?
             GROUP BY p ORDER BY p
         ");
         $stmtIn->execute([$yearFrom, $yearTo]);
 
         $stmtOut = $pdo->prepare("
-            SELECT YEAR(created_at) AS p, SUM(quantity) AS total
+            SELECT YEAR(created_at) AS p, SUM(quantity_kg) AS total
             FROM transactions
             WHERE movement_type = 'outbound' AND $custDest
               AND YEAR(created_at) BETWEEN ? AND ?

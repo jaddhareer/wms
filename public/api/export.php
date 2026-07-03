@@ -140,9 +140,12 @@ function exportSoftcase(PDO $pdo): void {
     $where = 'WHERE ' . implode(' AND ', $conditions);
     $stmt = $pdo->prepare("
         SELECT s.batch, s.pallet_number, s.qty_checked, s.uom_checked,
-            s.qty_soft, s.uom_soft, s.remarks, b.production_date, s.checked_at
+            s.qty_soft, s.uom_soft, s.remarks,
+            (SELECT b.production_date FROM bin_locations b
+                WHERE b.batch = s.batch AND b.pallet_number = s.pallet_number
+                LIMIT 1) AS production_date,
+            s.checked_at
         FROM softcase s
-        LEFT JOIN bin_locations b ON s.batch = b.batch AND s.pallet_number = b.pallet_number
         $where
         ORDER BY s.checked_at ASC
     ");

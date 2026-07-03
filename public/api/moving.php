@@ -41,7 +41,7 @@ try {
 
     // Lock and check source
     $srcStmt = $pdo->prepare("
-        SELECT id, quantity, quantity_kg, uom, product_type, location_type FROM bin_locations
+        SELECT id, quantity, quantity_kg, uom, product_type, production_date, location_type FROM bin_locations
         WHERE batch = ? AND pallet_number = ? AND bin_location = ?
         FOR UPDATE
     ");
@@ -91,8 +91,8 @@ try {
     // Increment (upsert) destination bin
     $incrStmt = $pdo->prepare("
         INSERT INTO bin_locations
-            (batch, pallet_number, quantity, uom, product_type, quantity_kg, bin_location, location_type, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())
+            (batch, pallet_number, quantity, uom, product_type, production_date, quantity_kg, bin_location, location_type, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
         ON DUPLICATE KEY UPDATE
             quantity    = quantity + ?,
             quantity_kg = ROUND(quantity_kg + ?, 2),
@@ -100,7 +100,8 @@ try {
     ");
     $incrStmt->execute([
         $batch, $pallet, $quantity, $src['uom'] ?: $uom, $src['product_type'],
-        $moveKg, $dest_bin, $src['location_type'] ?? null, $quantity, $moveKg
+        $src['production_date'], $moveKg, $dest_bin, $src['location_type'] ?? null,
+        $quantity, $moveKg
     ]);
 
     $pdo->commit();

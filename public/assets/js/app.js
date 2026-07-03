@@ -239,8 +239,8 @@ async function dashboard() {
             style="width:${Math.min(chi.occupancy,100)}%"></div></div>
            <div class="card-sub" style="margin-top:6px">Occupancy: ${chi.occupancy}%</div>`,
           svgBox())}
-        ${statCard('Inbound Hari Ini', todayIn.count + ' Txn', `${todayIn.qty||0} CTN masuk`, '', svgArrowDown())}
-        ${statCard('Outbound Hari Ini', todayOut.count + ' Txn', `${todayOut.qty||0} CTN keluar`, '', svgArrowUp())}
+        ${statCard('Inbound Hari Ini', todayIn.count + ' Txn', `${fNum(todayIn.qty||0)} Kg masuk`, '', svgArrowDown())}
+        ${statCard('Outbound Hari Ini', todayOut.count + ' Txn', `${fNum(todayOut.qty||0)} Kg keluar`, '', svgArrowUp())}
       </div>
 
       <!-- Chart -->
@@ -271,7 +271,7 @@ async function dashboard() {
               <tbody>${recent_in.length ? recent_in.map(r=>`
                 <tr>
                   <td>${r.batch||'-'}</td>
-                  <td class="mono">${r.quantity} ${r.uom}</td>
+                  <td class="mono">${fNum(r.quantity)} ${r.uom}</td>
                   <td class="mono">${fNum(r.quantity_kg)} kg</td>
                   <td class="txt-muted">${r.source_location||'-'}</td>
                   <td class="mono txt-muted">${fDateTime(r.created_at)}</td>
@@ -287,7 +287,7 @@ async function dashboard() {
               <tbody>${recent_out.length ? recent_out.map(r=>`
                 <tr>
                   <td>${r.batch||'-'}</td>
-                  <td class="mono">${r.quantity} ${r.uom}</td>
+                  <td class="mono">${fNum(r.quantity)} ${r.uom}</td>
                   <td class="mono">${fNum(r.quantity_kg)} kg</td>
                   <td class="txt-muted">${r.destination_location||'-'}</td>
                   <td class="mono txt-muted">${fDateTime(r.created_at)}</td>
@@ -391,7 +391,7 @@ function renderMainChart(labels, inboundData, outboundData) {
       labels,
       datasets: [
         {
-          label: 'Inbound (CTN)',
+          label: 'Inbound (Kg)',
           data: inboundData,
           backgroundColor: 'rgba(37,99,235,.7)',
           borderColor: '#2563eb',
@@ -399,7 +399,7 @@ function renderMainChart(labels, inboundData, outboundData) {
           borderRadius: 4,
         },
         {
-          label: 'Outbound ke Customer (CTN)',
+          label: 'Outbound ke Customer (Kg)',
           data: outboundData,
           backgroundColor: 'rgba(220,38,38,.7)',
           borderColor: '#dc2626',
@@ -634,7 +634,7 @@ function inbound() {
 async function ibAddRow() {
   const batch   = q('#ibBatch').value.trim();
   const pallet  = q('#ibPallet').value.trim().padStart(2,'0') || '01';
-  const qty     = parseInt(q('#ibQty').value) || 0;
+  const qty     = parseFloat(q('#ibQty').value) || 0;
   const bin     = q('#ibBin').value.trim();
   const from    = q('#ibFrom').value.trim();
   const storage = q('#ibStorage').value.trim();
@@ -851,7 +851,7 @@ function outbound() {
                 style="justify-content:flex-start;font-family:var(--font-mono);${isAdded ? 'opacity:.4;cursor:not-allowed' : ''}"
                 onclick="${isAdded ? '' : `obFillBin('${b.pallet_number}','${b.bin_location}',${b.quantity},event)`}"
                 ${isAdded ? 'disabled' : ''}>
-                ${b.pallet_number} - ${b.bin_location} — ${b.quantity} ${b.uom}
+                ${b.pallet_number} - ${b.bin_location} — ${fNum(b.quantity)} ${b.uom}
                 ${isAdded ? '<span style="margin-left:auto;font-size:10px;color:var(--text-muted)">sudah ditambahkan</span>' : ''}
               </button>`;
           }).join('')}
@@ -878,7 +878,7 @@ function obAddRow() {
 
   const batch  = q('#obBatch').value.trim();
   const pallet = q('#obPallet').value.trim().padStart(2,'0') || '01';
-  const qty    = parseInt(q('#obQty').value) || 0;
+  const qty    = parseFloat(q('#obQty').value) || 0;
   const bin    = q('#obBin').value.trim();
 
   if (!batch)  { toast('Batch wajib diisi', 'warning'); q('#obBatch').focus(); return; }
@@ -989,7 +989,7 @@ function softcase() {
           ${bins.map(b => `
             <button class="btn btn-secondary" style="justify-content:flex-start;font-family:var(--font-mono)"
               onclick="scFillQty('${b.pallet_number}',${b.quantity},event)">
-              ${b.pallet_number} - ${b.quantity} ${b.uom} - ${b.bin_location}
+              ${b.pallet_number} - ${fNum(b.quantity)} ${b.uom} - ${b.bin_location}
             </button>`).join('')}
         </div>
       `);
@@ -1022,9 +1022,9 @@ async function scSubmit() {
 
   const res = await api('softcase.php', 'POST', {
     batch, pallet,
-    qty_checked:  parseInt(q('#scQtyChecked').value) || 0,
+    qty_checked:  parseFloat(q('#scQtyChecked').value) || 0,
     uom_checked:  q('#scUomChecked').value,
-    qty_soft:     parseInt(q('#scQtySoft').value) || 0,
+    qty_soft:     parseFloat(q('#scQtySoft').value) || 0,
     uom_soft:     q('#scUomSoft').value,
     remarks:      q('#scRemarks').value.trim(),
   });
@@ -1124,7 +1124,7 @@ function moving() {
             ${bins.map(b => `
               <button class="btn btn-secondary" style="justify-content:flex-start;font-family:var(--font-mono)"
                 onclick="mvFillBin('${b.pallet_number}','${b.bin_location}',${b.quantity},event)">
-                ${b.pallet_number} - ${b.bin_location} - ${b.quantity} ${b.uom}
+                ${b.pallet_number} - ${b.bin_location} - ${fNum(b.quantity)} ${b.uom}
               </button>`).join('')}
           </div>
         `);
@@ -1155,7 +1155,7 @@ async function mvSubmit() {
     destination_bin: q('#mvDst').value.trim() || 'STAGE',
     batch:           q('#mvBatch').value.trim(),
     pallet:          q('#mvPallet').value.trim(),
-    quantity:        parseInt(q('#mvQty').value) || 0,
+    quantity:        parseFloat(q('#mvQty').value) || 0,
     uom:             q('#mvUom').value,
     remarks:         q('#mvRemarks').value.trim(),
   });
@@ -1940,4 +1940,3 @@ window.applyPopupValue = (val, e) => {
   }
   closeModal();
 };
-

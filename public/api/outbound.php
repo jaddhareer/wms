@@ -54,7 +54,7 @@ try {
 
         // Check stock availability
         $checkStmt = $pdo->prepare("
-            SELECT quantity, quantity_kg, uom, product_type FROM bin_locations
+            SELECT quantity, quantity_kg, uom, product_type, production_date FROM bin_locations
             WHERE batch = ? AND pallet_number = ? AND bin_location = ?
             FOR UPDATE
         ");
@@ -71,7 +71,9 @@ try {
         $converted  = convertToCtnKg($binData['product_type'] ?? '', $row_uom, $input_qty);
         $removeQty  = $converted['ctn']; // dipakai untuk decrement bin_locations
         $removeKg   = $converted['kg'];
+        $productType = $binData['product_type'];
         $uom        = $binData['uom'] ?: 'CTN';
+        $pdate      = $binData['production_date'];
         $current    = (float)$binData['quantity'];
 
         if ($current < $removeQty) {
@@ -104,14 +106,14 @@ try {
         if ($isWHExternal) {
             $incrStmt = $pdo->prepare("
                 INSERT INTO bin_locations
-                    (batch, pallet_number, quantity, uom, product_type, quantity_kg, bin_location, location_type, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, 'Jasco', 'WH External', NOW())
+                    (batch, pallet_number, quantity, uom, product_type, production_date, quantity_kg, bin_location, location_type, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 'Jasco', 'WH External', NOW())
                 ON DUPLICATE KEY UPDATE
                     quantity    = quantity + ?,
                     quantity_kg = ROUND(quantity_kg + ?, 2),
                     updated_at  = NOW()
             ");
-            $incrStmt->execute([$batch, $pallet_number, $removeQty, $uom, $productType, $removeKg, $removeQty, $removeKg]);
+            $incrStmt->execute([$batch, $pallet_number, $removeQty, $uom, $productType, $pdate, $removeKg, $removeQty, $removeKg]);
         }
 
         $results[] = ['batch' => $batch, 'pallet' => $pallet_number, 'qty' => $removeQty];
