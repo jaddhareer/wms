@@ -18,6 +18,7 @@ define('PRODUCT_KG_MAP', [
     '11gr/2.64kg'=> 2.64,
     '11gr/3.3kg' => 3.30,
     '11gr/5.5kg' => 5.50,
+    '11gr/11kg'  => 11.0,
 ]);
 
 // Product type → pcs per carton (untuk konversi UOM PCS)
@@ -30,6 +31,7 @@ define('PRODUCT_PCS_MAP', [
     '11gr/2.64kg'=> 240,
     '11gr/3.3kg' => 300,
     '11gr/5.5kg' => 500,
+    '11gr/11kg'  => 1000,
 ]);
 
 // Transaction ID prefixes

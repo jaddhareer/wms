@@ -37,10 +37,10 @@ $h = $rows[0];
     <div><strong>Tipe:</strong> <?= htmlspecialchars(ucfirst($h['movement_type'])) ?> <?= $h['is_cancelled'] ? '(DIBATALKAN/REVISI)' : '' ?></div>
     <div><strong>Oleh:</strong> <?= htmlspecialchars($h['username']) ?></div>
     <div><strong>Waktu:</strong> <?= htmlspecialchars($h['created_at']) ?></div>
-    <div><strong>Remarks:</strong> <?= htmlspecialchars($r['remarks'] ?? '-') ?></div>
+    <div><strong>Remarks:</strong> <?= htmlspecialchars($h['remarks'] ?? '-') ?></div>
     </div>
     <table>
-        <thead><tr><th>Batch</th><th>Pallet</th><th>Qty</th><th>UOM</th><th>Kg</th><th>Dari</th><th>Ke</th><th>Bin</th><th>Remarks</th></tr></thead>
+        <thead><tr><th>Batch</th><th>Pallet</th><th>Qty</th><th>UOM</th><th>Kg</th><th>Dari</th><th>Ke</th><th>Bin</th></tr></thead>
         <tbody>
             <?php foreach ($rows as $r): ?>
             <tr>

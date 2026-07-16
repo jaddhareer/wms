@@ -21,12 +21,12 @@ $source_bin   = sanitize(getInput('source_bin', ''));
 $dest_bin     = sanitize(getInput('destination_bin', ''));
 $batch        = sanitize(getInput('batch', ''));
 $pallet       = palletFormat(getInput('pallet', '01'));
-$quantity     = (int)getInput('quantity', 0);
+$rawQty       = (float)getInput('quantity', 0);
 $uom          = sanitize(getInput('uom', 'CTN'));
 $remarks      = sanitize(getInput('remarks', ''));
 
 // ─── Validation ────────────────────────────────────────────
-if (!$source_bin || !$dest_bin || !$batch || !$pallet || $quantity <= 0) {
+if (!$source_bin || !$dest_bin || !$batch || !$pallet || $rawQty <= 0) {
     jsonResponse(['success' => false, 'error' => 'Semua field wajib diisi dan quantity harus > 0']);
 }
 if ($source_bin === $dest_bin) {
@@ -53,13 +53,15 @@ try {
         jsonResponse(['success' => false, 'error' => "Stok tidak ditemukan: batch=$batch pallet=$pallet bin=$source_bin"]);
     }
     
-    $moveKg = calcKg($src['product_type'] ?? '', $quantity);
+    $converted = convertToCtnKg($src['product_type'] ?? '', $uom, $rawQty);
+    $quantity  = $converted['ctn'];
+    $moveKg    = $converted['kg'];
 
-    if ((int)$src['quantity'] < $quantity) {
+    if ((float)$src['quantity'] < $quantity) {
         $pdo->rollBack();
         jsonResponse([
             'success' => false,
-            'error'   => "Stok tidak mencukupi. Tersedia: {$src['quantity']} {$src['uom']}, diminta: $quantity"
+            'error'   => "Stok tidak mencukupi. Tersedia: {$src['quantity']} {$src['uom']}, diminta: $quantity CTN"
         ]);
     }
 

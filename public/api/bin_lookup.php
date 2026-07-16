@@ -10,7 +10,6 @@ $pdo = getDB();
 
 $bin    = sanitize($_GET['bin']    ?? '');
 $batch  = sanitize($_GET['batch']  ?? '');
-$pallet = sanitize($_GET['pallet'] ?? '');
 
 if ($bin) {
     // Feature 5: autofill moving dari source bin

@@ -55,6 +55,11 @@ try {
         $pallet  = $r['pallet_number'];
         $qty     = (float)$r['quantity'];
         $qtyKg   = (float)$r['quantity_kg'];
+        $binMetaForConv = $pdo->prepare("SELECT product_type FROM bin_locations WHERE batch=? AND pallet_number=? LIMIT 1");
+        $binMetaForConv->execute([$batch, $pallet]);
+        $productTypeForConv = $binMetaForConv->fetchColumn() ?: '';
+        $reconverted = convertToCtnKg($productTypeForConv, $r['uom'] ?? 'CTN', $qty);
+        $qty = $reconverted['ctn'];
 
         if ($originalType === 'inbound') {
             if (!$pallet || !$r['bin_location']) {
@@ -69,7 +74,11 @@ try {
                 jsonResponse(['success' => false, 'error' => "Stok batch $batch pallet $pallet sudah berkurang ({$current} < {$qty}), tidak dapat dibatalkan"]);
             }
 
-            $upd = $pdo->prepare("UPDATE bin_locations SET quantity=quantity-?, quantity_kg=ROUND(quantity_kg-?,2), updated_at=NOW() WHERE batch=? AND pallet_number=? AND bin_location=?");
+            $upd = $pdo->prepare("UPDATE bin_locations 
+                                  SET quantity=quantity-?, 
+                                      quantity_kg=ROUND(quantity_kg-?,2), 
+                                      updated_at=NOW() 
+                                  WHERE batch=? AND pallet_number=? AND bin_location=?");
             $upd->execute([$qty, $qtyKg, $batch, $pallet, $r['bin_location']]);
 
             $ins = $pdo->prepare("
@@ -190,5 +199,6 @@ try {
 
 } catch (PDOException $e) {
     if ($pdo->inTransaction()) $pdo->rollBack();
-    jsonResponse(['success' => false, 'error' => 'Database error: ' . $e->getMessage()], 500);
+    error_log('[transaction_cancel.php] ' . $e->getMessage());
+    jsonResponse(['success' => false, 'error' => 'Terjadi kesalahan pada server. Silakan coba lagi.'], 500);
 }

@@ -9,7 +9,7 @@ requireAuth();
 $pdo = getDB();
 
 $batch  = sanitize($_GET['batch']  ?? '');
-$pallet = sanitize($_GET['pallet'] ?? '');
+$pallet = palletFormat($_GET['pallet'] ?? '01');
 
 if ($batch && $pallet) {
     // Feature 5: autofill moving dari source bin

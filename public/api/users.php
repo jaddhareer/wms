@@ -9,7 +9,6 @@ require_once BASE_PATH . '/functions/auth.php';
 require_once BASE_PATH . '/functions/csrf.php';
 require_once BASE_PATH . '/functions/helpers.php';
 
-requireModule('users');
 $pdo    = getDB();
 $method = $_SERVER['REQUEST_METHOD'];
 

@@ -5,13 +5,13 @@
 'use strict';
 
 // ─── Constants ───────────────────────────────────────────────
-const PRODUCT_TYPES = ['500gr','5kg','10kg','25kg','CY','11gr/2.64kg','11gr/3.3kg','11gr/5.5kg'];
+const PRODUCT_TYPES = ['500gr','5kg','10kg','25kg','CY','11gr/2.64kg','11gr/3.3kg','11gr/5.5kg','11gr/11kg'];
 const UOM_TYPES     = ['CTN','PCS','KG','BAG'];
 const MOVE_TYPES    = { inbound:'Inbound', outbound:'Outbound', softcase:'Softcase', moving:'Moving' };
 const BADGE_MAP     = { inbound:'badge-green', outbound:'badge-red', softcase:'badge-amber', moving:'badge-blue' };
-const API           = (p) => `../public/api/${p}`;
-const KG_PER_CTN    = { '500gr':10,'5kg':10,'10kg':10,'25kg':25,'CY':10,'11gr/2.64kg':2.64,'11gr/3.3kg':3.3,'11gr/5.5kg':5.5 };
-const PCS_PER_CTN   = { '500gr':20,'5kg':2,'10kg':1,'25kg':1,'CY':1,'11gr/2.64kg':240,'11gr/3.3kg':300,'11gr/5.5kg':500 };
+const API           = (p) => `api/${p}`;
+const KG_PER_CTN    = { '500gr':10,'5kg':10,'10kg':10,'25kg':25,'CY':10,'11gr/2.64kg':2.64,'11gr/3.3kg':3.3,'11gr/5.5kg':5.5, '11gr/11kg':11 };
+const PCS_PER_CTN   = { '500gr':20,'5kg':2,'10kg':1,'25kg':1,'CY':1,'11gr/2.64kg':240,'11gr/3.3kg':300,'11gr/5.5kg':500, '11gr/11kg':1000 };
 
 // ─── State ───────────────────────────────────────────────────
 const state = {
@@ -77,7 +77,7 @@ function initApp() {
 
   q('#logoutBtn')?.addEventListener('click', async () => {
     await api('auth.php', 'POST', { action: 'logout' }, false);
-    location.href = '../public/index.php';
+    location.href = 'index.php';
   });
 
   q('#changePwdBtn')?.addEventListener('click', () => {
@@ -587,7 +587,7 @@ function inbound() {
     if(this.value.length !== 10) return;
     const batch = q('#ibBatch')?.value.trim();
     const location = 'Jasco';
-    const data = await api(`check_jasco.php?batch=${encodeURIComponent(batch)}&bin_location=${encodeURIComponent(location)}`);
+    const data = await api(`check_jasco.php?batch=${encodeURIComponent(batch)}`);
     if(!data.success || !data.data.length) return;
     const jascoStock = data.data;
     if(jascoStock.length === 1) {
@@ -709,7 +709,10 @@ function ibRenderTable() {
     return;
   }
 
-  const totalQty = rows.reduce((s,r) => s + r.quantity, 0);
+  const totalQty = rows.reduce((s, r) => {
+      const conv = convertQtyJs(r.ptype, r.uom, r.quantity);
+      return s + conv.ctn;
+  }, 0);
   sumDiv.classList.remove('hidden');
   sumDiv.innerHTML = `<span class="temp-summary-item">Total Baris: <strong>${rows.length}</strong></span>
     <span class="temp-summary-item">Total Qty: <strong>${totalQty} CTN</strong></span>`;
@@ -877,7 +880,7 @@ function obAddRow() {
   if (!dest) { toast('Isi Destination terlebih dahulu', 'warning'); return; }
 
   const batch  = q('#obBatch').value.trim();
-  const pallet = q('#obPallet').value.trim().padStart(2,'0') || '01';
+  const pallet = q('#obPallet').value.trim();
   const qty    = parseFloat(q('#obQty').value) || 0;
   const bin    = q('#obBin').value.trim();
 
@@ -1080,7 +1083,6 @@ function moving() {
   q('#mvSrc')?.addEventListener('input', async function() {
     if (this.value.length !== 9) return;
     const data = await api(`bin_lookup.php?bin=${encodeURIComponent(this.value)}`);
-    console.log(data);
     if (!data.success || !data.data.length) return;
     const bins = data.data;
     if (bins.length === 1) {
@@ -1410,7 +1412,6 @@ window.showTxnDetail = async (txnId) => {
   if (!data.success) { toast(data.error, 'error'); return; }
 
   const h = data.header, rows = data.rows;
-  const totalQty = rows.reduce((s,r) => s + Number(r.quantity||0), 0);
   const totalKg  = rows.reduce((s,r) => s + Number(r.quantity_kg||0), 0);
 
   openModal(`Detail Transaksi — ${txnId}`, `
@@ -1439,7 +1440,7 @@ window.showTxnDetail = async (txnId) => {
       </table>
     </div>
     <div style="margin-top:10px;font-size:12px;color:var(--text-muted)">
-      Total: <strong>${fNum(totalQty)}</strong> CTN | <strong>${fNum(totalKg)}</strong> kg
+      Total: <strong>${fNum(totalKg)}</strong> kg
     </div>
     <div class="form-actions" style="margin-top:18px">
       <button class="btn btn-secondary" onclick="window.open('api/transaction_print.php?transaction_id=${encodeURIComponent(txnId)}','_blank')">

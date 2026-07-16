@@ -15,9 +15,9 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 
 $batch         = sanitize(getInput('batch', ''));
 $pallet_number = palletFormat(getInput('pallet', '01'));
-$qty_checked   = (int)getInput('qty_checked', 0);
+$qty_checked   = (float)getInput('qty_checked', 0);
 $uom_checked   = sanitize(getInput('uom_checked', 'CTN'));
-$qty_soft      = (int)getInput('qty_soft', 0);
+$qty_soft      = (float)getInput('qty_soft', 0);
 $uom_soft      = sanitize(getInput('uom_soft', 'CTN'));
 $source_bin    = 'STAGE';
 $remarks       = sanitize(getInput('remarks', ''));
@@ -25,11 +25,6 @@ $remarks       = sanitize(getInput('remarks', ''));
 if (!$batch || !$pallet_number) {
     jsonResponse(['success' => false, 'error' => 'Batch dan nomor pallet wajib diisi']);
 }
-
-// Konversi PCS → CTN
-$qty_checked_ctn = strtoupper($uom_checked) === 'PCS' ? (int)ceil($qty_checked / 20) : $qty_checked;
-$qty_soft_ctn    = strtoupper($uom_soft)    === 'PCS' ? (int)ceil($qty_soft    / 20) : $qty_soft;
-if ($qty_checked_ctn < 1 && $qty_checked > 0) $qty_checked_ctn = 1;
 
 $SC_BIN = 'SC AREA'; // Destinasi softcase
 
@@ -54,8 +49,19 @@ try {
         jsonResponse(['success' => false, 'error' => "Pallet $pallet_number batch $batch tidak ditemukan di bin $source_bin"]);
     }
 
-    $decrementQty = max(1, $qty_checked_ctn);
-    if ((int)$src['quantity'] < $decrementQty) {
+    $checkedConv = convertToCtnKg($src['product_type'] ?? '', $uom_checked, (float)$qty_checked);
+    $softConv    = convertToCtnKg($src['product_type'] ?? '', $uom_soft, (float)$qty_soft);
+    $qty_checked_ctn = $checkedConv['ctn'];
+    $qty_soft_ctn    = $softConv['ctn'];
+    if ($qty_checked_ctn < 1 && $qty_checked > 0) $qty_checked_ctn = 1;
+
+    if ($qty_soft_ctn > $qty_checked_ctn) {
+        $pdo->rollBack();
+        jsonResponse(['success' => false, 'error' => "Qty soft ($qty_soft_ctn CTN) tidak boleh lebih besar dari qty checked ($qty_checked_ctn CTN)"]);
+    }
+
+    $decrementQty = $qty_checked;
+    if ((float)$src['quantity'] < $decrementQty) {
         $pdo->rollBack();
         jsonResponse(['success' => false, 'error' => "Stok tidak mencukupi. Tersedia: {$src['quantity']} CTN, diperlukan: $decrementQty CTN"]);
     }
@@ -64,7 +70,7 @@ try {
     // Generate transaction ID
     $txn_id = generateTxnId('softcase', $pdo);
 
-    $softKg = calcKg($src['product_type'] ?? '', $qty_soft);
+    $softKg = $softConv['kg'];
 
     if($softKg > 0) {
         // Insert transaction

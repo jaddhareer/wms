@@ -85,7 +85,7 @@ function exportStock(PDO $pdo): void {
     foreach ($rows as &$r) { $r['updated_at'] = fmtDate($r['updated_at']); $r['production_date'] = $r['production_date'] ? date('Y/m/d', strtotime($r['production_date'])) : ''; }
 
     $headers = ['Batch','Pallet No','Quantity','UOM','Product Type','Production Date','Qty KG','Bin Location','Location Type','Updated At'];
-    buildXlsx('Stock Overview', $headers, $rows, 'stock_overview_'.date('Ymd_His'));
+    dispatchExport('Stock Overview', $headers, $rows, 'EXPORTSTOCK_'.date('Ymd_His'));
 }
 
 // ─── Movements Export ────────────────────────────────────────
@@ -104,7 +104,11 @@ function exportMovements(PDO $pdo): void {
     $where = 'WHERE ' . implode(' AND ', $conditions);
     $stmt  = $pdo->prepare("
         SELECT t.transaction_id, t.movement_type, t.batch, t.quantity, t.uom,
-               t.quantity_kg, t.source_location, t.destination_location,
+               t.quantity_kg, 
+               (SELECT b.production_date FROM bin_locations b
+                WHERE b.batch = t.batch
+                LIMIT 1) AS production_date,
+               t.source_location, t.destination_location,
                t.remarks, t.created_at, u.username
         FROM transactions t
         LEFT JOIN users u ON t.user_id = u.id
@@ -114,8 +118,8 @@ function exportMovements(PDO $pdo): void {
     $rows = $stmt->fetchAll();
     foreach ($rows as &$r) { $r['created_at'] = fmtDate($r['created_at']); }
 
-    $headers = ['Transaction ID','Type','Batch','Qty','UOM','Qty KG','From','To','Remarks','Date','User'];
-    buildXlsx('Movements', $headers, $rows, 'movements_'.date('Ymd_His'));
+    $headers = ['Transaction ID','Type','Batch','Qty','UOM','Qty KG','Production Date','From','To','Remarks','Date','User'];
+    dispatchExport('Movements', $headers, $rows, 'MOVEMENTS_'.date('Ymd_His'));
 }
 
 // ─── Softcase Export ─────────────────────────────────────────
@@ -157,7 +161,7 @@ function exportSoftcase(PDO $pdo): void {
     }
 
     $headers = ['Batch','Pallet No','Qty Checked','UOM','Qty Soft','UOM Soft','Remarks','Production Date','Checked At'];
-    buildXlsx('Softcase Monitoring', $headers, $rows, 'softcase_'.date('Ymd_His'));
+    dispatchExport('Softcase Monitoring', $headers, $rows, 'SOFTCASE'.date('Ymd_His'));
 }
 
 // ─── XLSX Builder ────────────────────────────────────────────
@@ -175,10 +179,7 @@ function buildXlsx(string $title, array $headers, array $rows, string $filename)
     ];
 
     // Write headers
-    foreach ($headers as $col => $hdr) {
-        $cell = chr(65 + $col) . '1';
-        $sheet->setCellValue($cell, $hdr);
-    }
+    $sheet->fromArray($headers, NULL, 'A1');
     $lastCol = chr(65 + count($headers) - 1);
     $sheet->getStyle("A1:{$lastCol}1")->applyFromArray($headerStyle);
 
@@ -187,6 +188,10 @@ function buildXlsx(string $title, array $headers, array $rows, string $filename)
         $values = array_values($row);
         foreach ($values as $colIdx => $val) {
             $cell = chr(65 + $colIdx) . ($rowIdx + 2);
+            // Handle values that might be interpreted as formulas by Excel
+            if (is_string($val) && preg_match('/^[=+\-@\t\r]/', $val)) {
+                $val = "'" . $val; // Prefix with apostrophe to force text format
+            }
             $sheet->setCellValue($cell, $val);
         }
         // Alternate row colors
@@ -228,12 +233,14 @@ function buildCsv(array $headers, array $rows, string $filename): void {
     // Write data rows
     foreach ($rows as $row) {
         $formatedRow = array_map(function($value) {
-            if(is_numeric($value)) {
-                return str_replace('.', ',',(string)$value);
+            if (is_numeric($value)) {
+                return str_replace('.', ',', (string)$value);
+            }
+            if (is_string($value) && preg_match('/^[=+\-@\t\r]/', $value)) {
+                return "'" . $value;
             }
             return $value;
         }, array_values($row));
-        
         fputcsv($out, $formatedRow, ";");
     }
     

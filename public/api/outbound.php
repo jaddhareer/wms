@@ -43,7 +43,7 @@ try {
 
     foreach ($rows as $row) {
         $batch         = sanitize($row['batch'] ?? '');
-        $pallet_number = palletFormat($row['pallet'] ?? '01');
+        $pallet_number = $row['pallet'];
         $quantity      = (float)($row['quantity'] ?? 0);
         $bin_location  = sanitize($row['bin_location'] ?? '');
 
@@ -54,7 +54,7 @@ try {
 
         // Check stock availability
         $checkStmt = $pdo->prepare("
-            SELECT quantity, quantity_kg, uom, product_type, production_date FROM bin_locations
+            SELECT quantity, quantity_kg, uom, product_type, production_date, location_type FROM bin_locations
             WHERE batch = ? AND pallet_number = ? AND bin_location = ?
             FOR UPDATE
         ");
@@ -75,6 +75,7 @@ try {
         $uom        = $binData['uom'] ?: 'CTN';
         $pdate      = $binData['production_date'];
         $current    = (float)$binData['quantity'];
+        $source     = $binData['location_type'];
 
         if ($current < $removeQty) {
             $pdo->rollBack();
@@ -86,10 +87,10 @@ try {
             INSERT INTO transactions
                 (transaction_id, movement_type, batch, pallet_number, quantity, uom, quantity_kg,
                 source_location, destination_location, bin_location, user_id, remarks, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, 'WH LSN', ?, ?, ?, ?, NOW())
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
         ");
         $stmt->execute([
-            $txn_id, $movementType, $batch, $pallet_number, $input_qty, $row_uom, $removeKg,
+            $txn_id, $movementType, $batch, $pallet_number, $input_qty, $row_uom, $removeKg, $source,
             $isWHExternal ? 'Jasco' : $destination, $bin_location, $user['id'], $remarks
         ]);
 

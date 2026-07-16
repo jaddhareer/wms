@@ -25,14 +25,11 @@ $rows              = getInput('rows', []); // array of {batch, pallet, quantity,
 $remarks           = sanitize(getInput('remarks', ''));
 
 // ─── Validation ───────────────────────────────────────────
-if (!$inbound_from || !$storage_location || !$product_type) {
+if (!$inbound_from || !$storage_location) {
     jsonResponse(['success' => false, 'error' => 'Inbound from, storage location, dan product type wajib diisi']);
 }
 if (empty($rows) || !is_array($rows)) {
     jsonResponse(['success' => false, 'error' => 'Minimal 1 baris harus diisi']);
-}
-if (!array_key_exists($product_type, PRODUCT_KG_MAP)) {
-    jsonResponse(['success' => false, 'error' => 'Product type tidak valid']);
 }
 
 $user    = currentUser();
@@ -54,6 +51,7 @@ try {
         $row_uom         = sanitize($row['uom'] ?? $uom);
         $bin_location    = sanitize($row['bin_location'] ?? '');
         $production_date = sanitize($row['production_date'] ?? '');
+        $ptype           = sanitize($row['ptype'] ?? '');
 
         if (!$batch || !$pallet_number || $input_qty <= 0 || !$bin_location) {
             $pdo->rollBack();
@@ -64,7 +62,7 @@ try {
             jsonResponse(['success' => false, 'error' => "Production date wajib diisi untuk batch=$batch"]);
         }
 
-        $converted   = convertToCtnKg($product_type, $row_uom, $input_qty);
+        $converted   = convertToCtnKg($ptype, $row_uom, $input_qty);
         $quantity    = $converted['ctn'];   // disimpan ke bin_locations (boleh desimal)
         $quantity_kg = $converted['kg'];
 
@@ -91,7 +89,7 @@ try {
                 updated_at   = NOW()
         ");
         $stmt2->execute([
-            $batch, $pallet_number, $quantity, $product_type, $production_date, $quantity_kg, $bin_location, $storage_location
+            $batch, $pallet_number, $quantity, $ptype, $production_date, $quantity_kg, $bin_location, $storage_location
         ]);
 
         // Jika dari WH External: decrement bin Jasco (logic sama, ganti $quantity dengan hasil konversi)
@@ -132,5 +130,6 @@ try {
 
 } catch (PDOException $e) {
     if ($pdo->inTransaction()) $pdo->rollBack();
-    jsonResponse(['success' => false, 'error' => 'Database error: ' . $e->getMessage()], 500);
+    error_log('[inbound.php] ' . $e->getMessage());
+    jsonResponse(['success' => false, 'error' => 'Terjadi kesalahan pada server. Silakan coba lagi.'], 500);
 }
