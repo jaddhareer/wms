@@ -52,6 +52,10 @@ try {
         $pdo->rollBack();
         jsonResponse(['success' => false, 'error' => "Stok tidak ditemukan: batch=$batch pallet=$pallet bin=$source_bin"]);
     }
+    if ($src['location_type'] === 'WH External') {
+        $pdo->rollBack();
+        jsonResponse(['success' => false, 'error' => "Stok masih ada di WH External, lakukan Inbound dari WH External terlabih dahulu"]);
+    }
     
     $converted = convertToCtnKg($src['product_type'] ?? '', $uom, $rawQty);
     $quantity  = $converted['ctn'];
@@ -115,5 +119,6 @@ try {
 
 } catch (PDOException $e) {
     if ($pdo->inTransaction()) $pdo->rollBack();
-    jsonResponse(['success' => false, 'error' => 'Database error: ' . $e->getMessage()], 500);
+    error_log('[moving.php] ' . $e->getMessage());
+    jsonResponse(['success' => false, 'error' => 'Terjadi kesalahan pada server. Silakan coba lagi.'], 500);
 }

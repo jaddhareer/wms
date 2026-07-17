@@ -604,7 +604,7 @@ function inbound() {
           return `
             <button class="btn btn-secondary" 
               style="justify-content:flex-start;font-family:var(--font-mono);${isAdded ? 'opacity:.4;cursor:not-allowed' : ''}"
-              onclick="${isAdded ? '' : `ibFillBin('${b.pallet_number}','${b.bin_location}',${b.quantity},event)`}"
+              onclick="${isAdded ? '' : `ibFillBin('${b.pallet_number}',${b.quantity},event)`}"
               ${isAdded ? 'disabled' : ''}>
               ${b.pallet_number} - ${b.bin_location} ${b.quantity} ${b.uom}
               ${isAdded ? '<span style="margin-left:auto;font-size:10px;color:var(--text-muted)">sudah ditambahkan</span>' : ''}
@@ -615,10 +615,9 @@ function inbound() {
     }
     
   }
-  window.ibFillBin = (pallet, bin, qty, e) => {
+  window.ibFillBin = (pallet, qty, e) => {
   e.preventDefault();
   q('#ibPallet').value = pallet;
-  q('#ibBin').value = bin;
   q('#ibQty').value = qty;
   closeModal();
   };
