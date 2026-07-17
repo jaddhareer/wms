@@ -1,0 +1,4 @@
+/vendor/
+/storage/sessions/*
+!/storage/sessions/.gitkeep
+setup/users.sql

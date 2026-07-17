@@ -9,11 +9,16 @@ require_once BASE_PATH . '/functions/auth.php';
 require_once BASE_PATH . '/functions/csrf.php';
 require_once BASE_PATH . '/functions/helpers.php';
 
+requireAuth();
+
 $pdo    = getDB();
 $method = $_SERVER['REQUEST_METHOD'];
 
 // GET = list users
 if ($method === 'GET') {
+    if (!canAccess('users')) {
+        jsonResponse(['success' => false, 'error' => 'Tidak memiliki akses'], 403);
+    }
     $stmt = $pdo->query("SELECT id, username, userid, role, created_at FROM users ORDER BY created_at ASC");
     jsonResponse(['success' => true, 'data' => $stmt->fetchAll()]);
 }
@@ -21,6 +26,10 @@ if ($method === 'GET') {
 // POST/PUT/DELETE require CSRF
 csrfCheck();
 $action = getInput('action', '');
+
+if ($action !== 'change_own_password' && !canAccess('users')) {
+    jsonResponse(['success' => false, 'error' => 'Tidak memiliki akses'], 403);
+}
 
 switch ($action) {
     // ─── Create ────────────────────────────────────────────

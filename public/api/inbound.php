@@ -61,6 +61,10 @@ try {
             $pdo->rollBack();
             jsonResponse(['success' => false, 'error' => "Production date wajib diisi untuk batch=$batch"]);
         }
+        if (!array_key_exists($ptype, PRODUCT_KG_MAP)) {
+            $pdo->rollBack();
+            jsonResponse(['success' => false, 'error' => "Product type tidak valid pada baris batch=$batch"]);
+        }
 
         $converted   = convertToCtnKg($ptype, $row_uom, $input_qty);
         $quantity    = $converted['ctn'];   // disimpan ke bin_locations (boleh desimal)
