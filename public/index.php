@@ -2,12 +2,7 @@
 // ============================================================
 // WMS LSN - Main Entry Point
 // ============================================================
-define('BASE_PATH', dirname(__DIR__));
-require_once BASE_PATH . '/config/config.php';
-require_once BASE_PATH . '/config/database.php';
-require_once BASE_PATH . '/functions/auth.php';
-require_once BASE_PATH . '/functions/csrf.php';
-require_once BASE_PATH . '/functions/helpers.php';
+require_once dirname(__DIR__) . '/functions/bootstrap.php';
 
 sessionStart();
 $isAuth  = isLoggedIn();
@@ -171,7 +166,7 @@ $allowed = $isAuth ? (ROLE_ACCESS[$user['role']] ?? []) : [];
     </nav>
 
     <div class="sidebar-user">
-      <div class="user-avatar"><?= strtoupper(substr($user['username'], 0, 2)) ?></div>
+      <div class="user-avatar"><?= htmlspecialchars(strtoupper(substr($user['username'], 0, 2))) ?></div>
       <div class="user-info">
         <div class="user-name"><?= htmlspecialchars($user['username']) ?></div>
         <div class="user-role"><?= htmlspecialchars($user['role']) ?></div>

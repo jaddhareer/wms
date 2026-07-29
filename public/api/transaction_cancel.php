@@ -1,10 +1,6 @@
 <?php
-define('BASE_PATH', dirname(dirname(__DIR__)));
-require_once BASE_PATH . '/config/config.php';
-require_once BASE_PATH . '/config/database.php';
-require_once BASE_PATH . '/functions/auth.php';
-require_once BASE_PATH . '/functions/csrf.php';
-require_once BASE_PATH . '/functions/helpers.php';
+
+require_once dirname(dirname(__DIR__)) . '/functions/bootstrap.php';
 
 requireAuth();
 csrfCheck();

@@ -2,12 +2,7 @@
 // ============================================================
 // WMS LSN - Softcase Monitoring API
 // ============================================================
-define('BASE_PATH', dirname(dirname(__DIR__)));
-require_once BASE_PATH . '/config/config.php';
-require_once BASE_PATH . '/config/database.php';
-require_once BASE_PATH . '/functions/auth.php';
-require_once BASE_PATH . '/functions/csrf.php';
-require_once BASE_PATH . '/functions/helpers.php';
+require_once dirname(dirname(__DIR__)) . '/functions/bootstrap.php';
 
 requireModule('softcase-monitoring');
 
@@ -48,7 +43,11 @@ $total      = (int)$countStmt->fetchColumn();
 $totalPages = (int)ceil($total / $limit);
 
 $dataStmt = $pdo->prepare("
-    SELECT s.* FROM softcase s
+    SELECT s.id, s.batch, s.pallet_number, s.qty_checked, s.uom_checked,
+           s.qty_soft, s.uom_soft, s.remarks, s.checked_at,
+           b.quantity AS stock_qty, b.bin_location, b.production_date
+    FROM softcase s
+    LEFT JOIN bin_locations b ON s.batch = b.batch AND s.pallet_number = b.pallet_number
     $where
     ORDER BY s.checked_at DESC
     LIMIT $limit OFFSET $offset

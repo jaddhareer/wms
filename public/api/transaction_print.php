@@ -1,9 +1,6 @@
 <?php
-define('BASE_PATH', dirname(dirname(__DIR__)));
-require_once BASE_PATH . '/config/config.php';
-require_once BASE_PATH . '/config/database.php';
-require_once BASE_PATH . '/functions/auth.php';
-require_once BASE_PATH . '/functions/helpers.php';
+
+require_once dirname(dirname(__DIR__)) . '/functions/bootstrap.php';
 
 requireAuth();
 $pdo = getDB();
@@ -40,7 +37,7 @@ $h = $rows[0];
     <div><strong>Remarks:</strong> <?= htmlspecialchars($h['remarks'] ?? '-') ?></div>
     </div>
     <table>
-        <thead><tr><th>Batch</th><th>Pallet</th><th>Qty</th><th>UOM</th><th>Kg</th><th>Dari</th><th>Ke</th><th>Bin</th></tr></thead>
+        <thead><tr><th>Batch</th><th>Pallet</th><th>Qty</th><th>UOM</th><th>Kg</th><th>Dari</th><th>Bin</th><th>Ke</th></tr></thead>
         <tbody>
             <?php foreach ($rows as $r): ?>
             <tr>
