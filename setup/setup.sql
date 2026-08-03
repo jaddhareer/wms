@@ -5,23 +5,6 @@ CREATE DATABASE IF NOT EXISTS wms_lsn CHARACTER SET utf8mb4 COLLATE utf8mb4_unic
 USE wms_lsn;
 
 -- ================================================
--- USERS
--- ================================================
-CREATE TABLE IF NOT EXISTS users (
-    id          INT AUTO_INCREMENT PRIMARY KEY,
-    username    VARCHAR(25)  NOT NULL,
-    userid      VARCHAR(10)  NOT NULL UNIQUE,
-    role        ENUM('admin','supervisor','staff','softchecker') NOT NULL,
-    password    VARCHAR(255) NOT NULL,
-    created_at  DATETIME     DEFAULT CURRENT_TIMESTAMP
-) ENGINE=InnoDB;
-
--- Default admin: userid=admin001 / password=Admin@123
-INSERT INTO users (username, userid, role, password) VALUES
-('Administrator', 'admin001', 'admin', '$2y$12$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi')
-ON DUPLICATE KEY UPDATE id=id;
-
--- ================================================
 -- TRANSACTIONS
 -- ================================================
 CREATE TABLE transactions (
@@ -29,11 +12,14 @@ CREATE TABLE transactions (
     transaction_id       VARCHAR(25)  NOT NULL,
     movement_type        ENUM('inbound','outbound','softcase','moving') NOT NULL,
     batch                VARCHAR(25),
+    pallet_number        VARCHAR(10),
     quantity             INT,
     uom                  VARCHAR(10),
     quantity_kg          DECIMAL(10,2),
     source_location      VARCHAR(25),
     destination_location VARCHAR(25),
+    bin_location         VARCHAR(25),
+    is_cancelled         TINYINT(1) NOT NULL DEFAULT 0,
     user_id              INT,
     remarks              VARCHAR(225),
     created_at           DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -46,7 +32,7 @@ CREATE TABLE transactions (
 CREATE TABLE IF NOT EXISTS bin_locations (
     id             INT AUTO_INCREMENT PRIMARY KEY,
     batch          VARCHAR(25) NOT NULL,
-    pallet_number  VARCHAR(3)  NOT NULL,
+    pallet_number  VARCHAR(10)  NOT NULL,
     quantity       INT         DEFAULT 0,
     quantity_kg    DECIMAL(10,2) DEFAULT 0,
     uom            VARCHAR(10),
@@ -68,6 +54,7 @@ CREATE TABLE IF NOT EXISTS softcase (
     uom_checked   VARCHAR(10),
     qty_soft      INT         DEFAULT 0,
     uom_soft      VARCHAR(10),
+    remarks       VARCHAR(225),
     checked_at    DATETIME    DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     UNIQUE KEY uq_softcase (batch, pallet_number)
 ) ENGINE=InnoDB;
