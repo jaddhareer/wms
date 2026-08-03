@@ -584,6 +584,7 @@ function inbound() {
   async function ibAutoFill() {
     let productionDate = q('#ibProdDate').value;
     const batch = q('#ibBatch')?.value.trim();
+    if(batch.length !== 10) return;
     const checkPD = await api(`bin_lookup.php?batch=${encodeURIComponent(batch)}`);
     if (checkPD.success && checkPD.data.length > 0 && checkPD.data[0].production_date) {
       productionDate = checkPD.data[0].production_date;
@@ -592,7 +593,7 @@ function inbound() {
 
     const isFromExt = q('#ibFrom').value === 'WH External';
     if(!isFromExt) return;
-    if(this.value.length !== 10) return;
+    if(batch.length !== 10) return;
     const data = await api(`check_jasco.php?batch=${encodeURIComponent(batch)}`);
     if(!data.success || !data.data.length) return;
     const jascoStock = data.data;

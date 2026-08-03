@@ -109,7 +109,7 @@ try {
                     quantity_kg = ROUND(quantity_kg + ?, 2),
                     updated_at  = NOW()
             ");
-            $incrStmt->execute([$batch, $pallet_number, $removeQty, $uom, $productType, $pdate, $removeKg, $removeQty, $removeKg]);
+            $incrStmt->execute([$batch, JASCO_PALLET, $removeQty, $uom, $productType, $pdate, $removeKg, $removeQty, $removeKg]);
         }
 
         $results[] = ['batch' => $batch, 'pallet' => $pallet_number, 'qty' => $removeQty];
