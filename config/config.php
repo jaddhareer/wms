@@ -7,6 +7,7 @@ defined('BASE_PATH') or die('Direct access not allowed');
 define('APP_NAME',        'WMS LSN');
 define('APP_VERSION',     '1.0.0');
 define('SESSION_TIMEOUT', 28800); // 8 hours
+define('JASCO_PALLET', '-');
 
 // Product type → kg per carton
 define('PRODUCT_KG_MAP', [

@@ -98,7 +98,7 @@ try {
                 WHERE batch = ? AND pallet_number = ? AND bin_location = 'Jasco'
                 FOR UPDATE
             ");
-            $checkJasco->execute([$batch, $pallet_number]);
+            $checkJasco->execute([$batch, JASCO_PALLET]);
             $jascoQty = (float)$checkJasco->fetchColumn();
 
             if ($jascoQty < $quantity) {
@@ -113,7 +113,7 @@ try {
                     updated_at  = NOW()
                 WHERE batch = ? AND pallet_number = ? AND bin_location = 'Jasco'
             ");
-            $decrJasco->execute([$quantity, $quantity_kg, $batch, $pallet_number]);
+            $decrJasco->execute([$quantity, $quantity_kg, $batch, JASCO_PALLET]);
         }
 
         $results[] = ['batch' => $batch, 'pallet' => $pallet_number, 'qty' => $input_qty, 'uom' => $row_uom];

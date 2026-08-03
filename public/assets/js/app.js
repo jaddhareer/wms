@@ -582,45 +582,24 @@ function inbound() {
   }
   
   async function ibAutoFill() {
+    let productionDate = q('#ibProdDate').value;
+    const batch = q('#ibBatch')?.value.trim();
+    const checkPD = await api(`bin_lookup.php?batch=${encodeURIComponent(batch)}`);
+    if (checkPD.success && checkPD.data.length > 0 && checkPD.data[0].production_date) {
+      productionDate = checkPD.data[0].production_date;
+      q('#ibProdDate').value = productionDate; // sync ke form
+    }
+
     const isFromExt = q('#ibFrom').value === 'WH External';
     if(!isFromExt) return;
     if(this.value.length !== 10) return;
-    const batch = q('#ibBatch')?.value.trim();
-    const location = 'Jasco';
     const data = await api(`check_jasco.php?batch=${encodeURIComponent(batch)}`);
     if(!data.success || !data.data.length) return;
     const jascoStock = data.data;
-    if(jascoStock.length === 1) {
-      q('#ibPallet').value = jascoStock[0].pallet_number;
-      q('#ibBin').value = jascoStock[0].bin_location;
-      q('#ibQty').value = jascoStock[0].quantity;
-      q('#ibProductType').value = jascoStock[0].product_type;
-      q('#ibUom').value = jascoStock[0].uom;
-    } else {
-      openModal(`Pilih Bin ${batch}`, `
-      <div style="display:flex;flex-direction:column;gap:8px">
-        ${jascoStock.map(b => {
-          const isAdded = state.inboundRows.some(r => r.batch === b.batch && r.pallet === b.pallet_number);
-          return `
-            <button class="btn btn-secondary" 
-              style="justify-content:flex-start;font-family:var(--font-mono);${isAdded ? 'opacity:.4;cursor:not-allowed' : ''}"
-              onclick="${isAdded ? '' : `ibFillBin('${b.pallet_number}',${b.quantity},event)`}"
-              ${isAdded ? 'disabled' : ''}>
-              ${b.pallet_number} - ${b.bin_location} ${b.quantity} ${b.uom}
-              ${isAdded ? '<span style="margin-left:auto;font-size:10px;color:var(--text-muted)">sudah ditambahkan</span>' : ''}
-            </button>`;
-        }).join('')}
-      </div>
-    `);
-    }
-    
+    q('#ibProductType').value = jascoStock[0].product_type;
+    q('#ibUom').value = jascoStock[0].uom;
+    ibUpdateKgPreview();
   }
-  window.ibFillBin = (pallet, qty, e) => {
-  e.preventDefault();
-  q('#ibPallet').value = pallet;
-  q('#ibQty').value = qty;
-  closeModal();
-  };
 
   q('#ibAddBtn').addEventListener('click', ibAddRow);
   q('#ibClearBtn').addEventListener('click', () => { state.inboundRows = []; ibRenderTable(); });
@@ -638,8 +617,9 @@ async function ibAddRow() {
   const from    = q('#ibFrom').value.trim();
   const storage = q('#ibStorage').value.trim();
   const ptype   = q('#ibProductType').value;
+  const pdate   = q('#ibProdDate').value;
 
-  if (!from || !storage || !ptype) { toast('Isi Inbound From, Storage Location, dan Product Type terlebih dahulu', 'warning'); return; }
+  if (!from || !storage || !ptype || !pdate) { toast('Data esensial belum lengkap, lengkapi terlebih dahulu!', 'warning'); return; }
   if (!batch) { toast('Batch wajib diisi', 'warning'); q('#ibBatch').focus(); return; }
   if (qty <= 0) { toast('Quantity harus lebih dari 0', 'warning'); q('#ibQty').focus(); return; }
 
@@ -660,20 +640,6 @@ async function ibAddRow() {
     return;
   }
 
-  // Cek apakah batch sudah punya production_date tersimpan
-  let productionDate = q('#ibProdDate').value;
-  const checkPD = await api(`bin_lookup.php?batch=${encodeURIComponent(batch)}`);
-  if (checkPD.success && checkPD.data.length > 0 && checkPD.data[0].production_date) {
-    productionDate = checkPD.data[0].production_date;
-    q('#ibProdDate').value = productionDate; // sync ke form
-  }
-
-  if (!productionDate) {
-    toast('Production Date wajib diisi', 'warning');
-    q('#ibProdDate').focus();
-    return;
-  }
-
   const finalBin = bin || 'STAGE';
 
   state.inboundRows.push({
@@ -681,7 +647,7 @@ async function ibAddRow() {
     quantity: qty,
     uom: q('#ibUom').value,
     bin_location: finalBin,
-    production_date: productionDate
+    production_date: pdate
   });
   ibRenderTable();
 
@@ -866,12 +832,13 @@ function outbound() {
     q('#obPallet').value = pallet;
     q('#obBin').value = bin;
     q('#obQty').value = qty;
+    q('#obBatch').focus();
     closeModal();
   };
 
   q('#obClearBtn').addEventListener('click', () => { state.outboundRows = []; obRenderTable(); });
   q('#obSubmitBtn').addEventListener('click', obSubmit);
-  q('#obBin').addEventListener('keydown', e => { if (e.key === 'Enter') obAddRow(); });
+  q('#obBatch').addEventListener('keydown', e => { if (e.key === 'Enter') obAddRow(); });
 }
 
 function obAddRow() {
