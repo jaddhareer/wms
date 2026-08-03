@@ -234,7 +234,9 @@ window.WMS = {
   auth: <?= $isAuth ? 'true' : 'false' ?>,
   user: <?= $isAuth ? json_encode($user) : 'null' ?>,
   allowed: <?= json_encode($allowed) ?>,
-  csrf: "<?= $csrf ?>"
+  csrf: "<?= $csrf ?>",
+  productKgMap: <?= json_encode(PRODUCT_KG_MAP) ?>,
+  productPcsMap: <?= json_encode(PRODUCT_PCS_MAP) ?>
 };
 </script>
 <script src="assets/js/app.js"></script>

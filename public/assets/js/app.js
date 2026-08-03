@@ -5,13 +5,10 @@
 'use strict';
 
 // ─── Constants ───────────────────────────────────────────────
-const PRODUCT_TYPES = ['500gr','5kg','10kg','25kg','CY','11gr/2.64kg','11gr/3.3kg','11gr/5.5kg','11gr/11kg'];
 const UOM_TYPES     = ['CTN','PCS','KG','BAG'];
 const MOVE_TYPES    = { inbound:'Inbound', outbound:'Outbound', softcase:'Softcase', moving:'Moving' };
 const BADGE_MAP     = { inbound:'badge-green', outbound:'badge-red', softcase:'badge-amber', moving:'badge-blue' };
 const API           = (p) => `api/${p}`;
-const KG_PER_CTN    = { '500gr':10,'5kg':10,'10kg':10,'25kg':25,'CY':10,'11gr/2.64kg':2.64,'11gr/3.3kg':3.3,'11gr/5.5kg':5.5, '11gr/11kg':11 };
-const PCS_PER_CTN   = { '500gr':20,'5kg':2,'10kg':1,'25kg':1,'CY':1,'11gr/2.64kg':240,'11gr/3.3kg':300,'11gr/5.5kg':500, '11gr/11kg':1000 };
 
 // ─── State ───────────────────────────────────────────────────
 const state = {
@@ -464,7 +461,7 @@ function inbound() {
               </datalist>
             </div>
             <div class="field-group"><label class="field-label">Product Type *</label>
-              <select id="ibProductType" class="field-select"><option value="">-- Pilih --</option>${PRODUCT_TYPES.map(p=>`<option>${p}</option>`).join('')}</select>
+              <select id="ibProductType" class="field-select"><option value="">-- Pilih --</option>${Object.keys(WMS.productKgMap).map(p=>`<option>${p}</option>`).join('')}</select>
             </div>
             <div class="field-group">
               <label class="field-label">Production Date *</label>
@@ -1739,8 +1736,8 @@ function renderPagination(p, scope) {
 }
 
 function convertQtyJs(productType, uom, inputQty) {
-  const kgPerCtn  = KG_PER_CTN[productType] || 0;
-  const pcsPerCtn = PCS_PER_CTN[productType] || 1;
+  const kgPerCtn  = WMS.productKgMap[productType] || 0;
+  const pcsPerCtn = WMS.productPcsMap[productType] || 1;
   let ctn;
   switch ((uom||'').toUpperCase()) {
     case 'PCS': ctn = pcsPerCtn > 0 ? inputQty / pcsPerCtn : 0; break;
