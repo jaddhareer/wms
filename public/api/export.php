@@ -99,12 +99,12 @@ function exportMovements(PDO $pdo): void {
     $where = 'WHERE ' . implode(' AND ', $conditions);
     $stmt  = $pdo->prepare("
         SELECT t.transaction_id, t.movement_type, t.batch, t.quantity, t.uom,
-               t.quantity_kg, 
-               (SELECT b.production_date FROM bin_locations b
+            t.quantity_kg, 
+            (SELECT b.production_date FROM bin_locations b
                 WHERE b.batch = t.batch
                 LIMIT 1) AS production_date,
-               t.source_location, t.destination_location,
-               t.remarks, t.created_at, u.username
+            t.source_location, t.source_bin, t.destination_location, t.destination_bin,
+            t.remarks, t.created_at, u.username
         FROM transactions t
         LEFT JOIN users u ON t.user_id = u.id
         $where ORDER BY t.created_at ASC
@@ -113,7 +113,7 @@ function exportMovements(PDO $pdo): void {
     $rows = $stmt->fetchAll();
     foreach ($rows as &$r) { $r['created_at'] = fmtDate($r['created_at']); }
 
-    $headers = ['Transaction ID','Type','Batch','Qty','UOM','Qty KG','Production Date','From','To','Remarks','Date','User'];
+    $headers = ['Transaction ID','Type','Batch','Qty','UOM','Qty KG','Production Date','From','Source Bin','To','Dest Bin','Remarks','Date','User'];
     dispatchExport('Movements', $headers, $rows, 'MOVEMENTS_'.date('Ymd_His'));
 }
 

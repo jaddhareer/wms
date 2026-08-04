@@ -73,12 +73,14 @@ try {
         $stmt = $pdo->prepare("
             INSERT INTO transactions
                 (transaction_id, movement_type, batch, pallet_number, quantity, uom, quantity_kg,
-                source_location, destination_location, bin_location, user_id, remarks, created_at)
-            VALUES (?, 'softcase', ?, ?, ?, 'CTN', ?, ?, 'SC AREA', 'STAGE', ?, ?, NOW())
+                source_location, source_bin, destination_location, destination_bin, user_id, remarks, created_at)
+            VALUES (?, 'softcase', ?, ?, ?, 'CTN', ?, ?, ?, ?, 'SC AREA', ?, ?, NOW())
         ");
         $stmt->execute([
-            $txn_id, $batch, $pallet_number, $qty_soft_ctn, $softKg, $source_bin, $user['id'],
-            $remarks
+            $txn_id, $batch, $pallet_number, $qty_soft_ctn, $softKg,
+            $src['location_type'], $source_bin,
+            $src['location_type'],
+            $user['id'], $remarks
         ]);
 
         // Decrement source bin
@@ -97,13 +99,13 @@ try {
     $incrStmt = $pdo->prepare("
         INSERT INTO bin_locations
             (batch, pallet_number, quantity, uom, product_type, quantity_kg, bin_location, location_type, updated_at)
-        VALUES (?, ?, ?, 'CTN', ?, ?, 'SC AREA', 'LSN Ambient', NOW())
+        VALUES (?, ?, ?, 'CTN', ?, ?, 'SC AREA', ?, NOW())
         ON DUPLICATE KEY UPDATE
             quantity    = quantity + ?,
             quantity_kg = ROUND(quantity_kg + ?, 2),
             updated_at  = NOW()
     ");
-    $incrStmt->execute([$batch, $pallet_number . "SC", $qty_soft_ctn, $src['product_type'], $softKg, $qty_soft_ctn, $softKg]);
+    $incrStmt->execute([$batch, $pallet_number . "SC", $qty_soft_ctn, $src['product_type'], $softKg, $src['location_type'], $qty_soft_ctn, $softKg]);
 
     // Update tabel softcase
     $scStmt = $pdo->prepare("

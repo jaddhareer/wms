@@ -29,7 +29,8 @@ $canCancel = in_array($header['movement_type'], ['inbound','outbound','moving'])
 
 // Data lama tanpa bin_location/pallet_number tidak bisa dibatalkan otomatis
 foreach ($rows as $r) {
-    if (in_array($r['movement_type'], ['inbound','outbound']) && (empty($r['bin_location']) || empty($r['pallet_number']))) {
+    $hasBin = !empty($r['source_bin']) || !empty($r['destination_bin']) || !empty($r['bin_location']);
+    if (in_array($r['movement_type'], ['inbound','outbound']) && (!$hasBin || empty($r['pallet_number']))) {
         $canCancel = false;
         break;
     }

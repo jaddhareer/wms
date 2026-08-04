@@ -71,12 +71,14 @@ try {
     $stmt = $pdo->prepare("
         INSERT INTO transactions
             (transaction_id, movement_type, batch, pallet_number, quantity, uom, quantity_kg,
-            source_location, destination_location, user_id, remarks, created_at)
-        VALUES (?, 'moving', ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+            source_location, source_bin, destination_location, destination_bin, user_id, remarks, created_at)
+        VALUES (?, 'moving', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
     ");
     $stmt->execute([
         $txn_id, $batch, $pallet, $quantity, $uom, $moveKg,
-        $source_bin, $dest_bin, $user['id'], $remarks
+        $src['location_type'], $source_bin,
+        $src['location_type'], $dest_bin,
+        $user['id'], $remarks
     ]);
 
     // Decrement source bin

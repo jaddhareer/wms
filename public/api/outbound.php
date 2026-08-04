@@ -81,12 +81,15 @@ try {
         $stmt = $pdo->prepare("
             INSERT INTO transactions
                 (transaction_id, movement_type, batch, pallet_number, quantity, uom, quantity_kg,
-                source_location, destination_location, bin_location, user_id, remarks, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+                source_location, source_bin, destination_location, destination_bin, user_id, remarks, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
         ");
         $stmt->execute([
-            $txn_id, $movementType, $batch, $pallet_number, $input_qty, $row_uom, $removeKg, $source,
-            $isWHExternal ? 'Jasco' : $destination, $bin_location, $user['id'], $remarks
+            $txn_id, $movementType, $batch, $pallet_number, $input_qty, $row_uom, $removeKg,
+            $source, $bin_location,
+            $isWHExternal ? 'WH External' : $destination,
+            $isWHExternal ? 'Jasco' : null,
+            $user['id'], $remarks
         ]);
 
         $stmt2 = $pdo->prepare("

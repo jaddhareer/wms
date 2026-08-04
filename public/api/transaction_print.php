@@ -37,7 +37,7 @@ $h = $rows[0];
     <div><strong>Remarks:</strong> <?= htmlspecialchars($h['remarks'] ?? '-') ?></div>
     </div>
     <table>
-        <thead><tr><th>Batch</th><th>Pallet</th><th>Qty</th><th>UOM</th><th>Kg</th><th>Dari</th><th>Bin</th><th>Ke</th></tr></thead>
+        <thead><tr><th>Batch</th><th>Pallet</th><th>Qty</th><th>UOM</th><th>Kg</th><th>Dari</th><th>Bin Asal</th><th>Ke</th><th>Bin Tujuan</th></tr></thead>
         <tbody>
             <?php foreach ($rows as $r): ?>
             <tr>
@@ -47,8 +47,9 @@ $h = $rows[0];
                 <td><?= htmlspecialchars($r['uom'] ?? '') ?></td>
                 <td><?= number_format($r['quantity_kg'],2) ?></td>
                 <td><?= htmlspecialchars($r['source_location'] ?? '-') ?></td>
-                <td><?= htmlspecialchars($r['bin_location'] ?? '-') ?></td>
+                <td><?= htmlspecialchars($r['source_bin'] ?? '-') ?></td>
                 <td><?= htmlspecialchars($r['destination_location'] ?? '-') ?></td>
+                <td><?= htmlspecialchars($r['destination_bin'] ?? '-') ?></td>
             </tr>
             <?php endforeach; ?>
         </tbody>

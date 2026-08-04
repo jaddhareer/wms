@@ -500,7 +500,7 @@ function inbound() {
           <div id="ibSummary" class="temp-summary hidden" style="margin:12px"></div>
           <div class="table-wrap" style="border:none;border-radius:0">
             <table>
-              <thead><tr><th>#</th><th>Batch</th><th>Type</th><th>Pallet</th><th>Qty</th><th>UOM</th><th>Bin</th><th>Prod Date</th><th></th></tr></thead>
+              <thead><tr><th>#</th><th>Batch</th><th>Type</th><th>Pallet</th><th>Qty</th><th>UOM</th><th>Bin</th><th>Storage</th><th>Prod Date</th><th></th></tr></thead>
               <tbody id="ibTableBody"><tr class="empty-row"><td colspan="6">Tambahkan baris terlebih dahulu</td></tr></tbody>
             </table>
           </div>
@@ -645,9 +645,10 @@ async function ibAddRow() {
     quantity: qty,
     uom: q('#ibUom').value,
     bin_location: finalBin,
-    production_date: pdate
+    production_date: pdate,
+    storage_location: storage
   });
-  ibRenderTable();
+    ibRenderTable();
 
   // Reset per-row fields, focus back to pallet
   q('#ibPallet').value = '';
@@ -689,6 +690,7 @@ function ibRenderTable() {
       <td class="mono">${r.quantity}</td>
       <td class="mono">${r.uom}</td>
       <td class="mono">${r.bin_location}</td>
+      <td class="mono">${r.storage_location}</td>
       <td class="mono">${r.production_date}</td>
       <td>
         <button class="btn btn-ghost btn-sm" onclick="ibDeleteRow(${i})" title="Hapus">
@@ -1387,7 +1389,7 @@ window.showTxnDetail = async (txnId) => {
     </div>
     <div class="table-wrap" style="border:none">
       <table>
-        <thead><tr><th>Batch</th><th>Pallet</th><th>Qty</th><th>Kg</th><th>Dari</th><th>Bin</th><th>Ke</th><th>Remarks</th></tr></thead>
+        <thead><tr><th>Batch</th><th>Pallet</th><th>Qty</th><th>Kg</th><th>Dari</th><th>Bin Asal</th><th>Ke</th><th>Bin Tujuan</th><th>Remarks</th></tr></thead>
         <tbody>
           ${rows.map(r => `
             <tr>
@@ -1396,8 +1398,9 @@ window.showTxnDetail = async (txnId) => {
               <td class="mono">${fNum(r.quantity)} ${r.uom||''}</td>
               <td class="mono">${fNum(r.quantity_kg)} kg</td>
               <td class="txt-muted">${r.source_location||'-'}</td>
-              <td class="mono txt-muted">${r.bin_location||'-'}</td>
+              <td class="mono txt-muted">${r.source_bin||'-'}</td>
               <td class="txt-muted">${r.destination_location||'-'}</td>
+              <td class="mono txt-muted">${r.destination_bin||'-'}</td>
               <td class="mono txt-muted">${r.remarks||'-'}</td>
             </tr>`).join('')}
         </tbody>

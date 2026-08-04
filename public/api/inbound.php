@@ -47,6 +47,7 @@ try {
         $bin_location    = sanitize($row['bin_location'] ?? '');
         $production_date = sanitize($row['production_date'] ?? '');
         $ptype           = sanitize($row['ptype'] ?? '');
+        $row_storage     = sanitize($row['storage_location'] ?? $storage_location);
 
         if (!$batch || !$pallet_number || $input_qty <= 0 || !$bin_location) {
             $pdo->rollBack();
@@ -69,12 +70,15 @@ try {
         $stmt = $pdo->prepare("
             INSERT INTO transactions
                 (transaction_id, movement_type, batch, pallet_number, quantity, uom, quantity_kg,
-                source_location, destination_location, bin_location, user_id, remarks, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'WH LSN', ?, ?, ?, NOW())
+                source_location, source_bin, destination_location, destination_bin, user_id, remarks, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
         ");
         $stmt->execute([
             $txn_id, $movementType, $batch, $pallet_number, $input_qty, $row_uom, $quantity_kg,
-            $isFromWHExternal ? 'Jasco' : $inbound_from, $bin_location, $user['id'], $remarks
+            $isFromWHExternal ? 'WH External' : $inbound_from,
+            $isFromWHExternal ? 'Jasco' : null,
+            $row_storage, $bin_location,
+            $user['id'], $remarks
         ]);
 
         // Upsert bin_locations — pakai hasil konversi CTN
