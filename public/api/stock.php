@@ -2,6 +2,7 @@
 require_once dirname(dirname(__DIR__)) . '/functions/bootstrap.php';
 
 requireModule('stock');
+$vendor = requireVendorScope();
 $pdo  = getDB();
 $mode = sanitize($_GET['mode'] ?? 'grouped'); // grouped | detail | export
 
@@ -19,6 +20,7 @@ if ($mode === 'detail' || $mode === 'export') {
     if ($fPallet) { $conditions[] = 'pallet_number LIKE ?';  $params[] = "%$fPallet%"; }
     if ($fBin)    { $conditions[] = 'bin_location LIKE ?';   $params[] = "%$fBin%"; }
     if ($fType)   { $conditions[] = 'location_type LIKE ?';  $params[] = "%$fType%"; }
+    if ($vendor)  { $conditions[] = 'vendor_code = ?';       $params[] = $vendor; }
 
     $where = 'WHERE ' . implode(' AND ', $conditions);
     $stmt  = $pdo->prepare("
@@ -42,6 +44,7 @@ if ($fBatch)  { $conditions[] = 'batch LIKE ?';         $params[] = "%$fBatch%";
 if ($fType)   { $conditions[] = 'location_type LIKE ?'; $params[] = "%$fType%"; }
 if ($fBin)    { $conditions[] = 'bin_location LIKE ?';  $params[] = "%$fBin%"; }
 if ($fPallet) { $conditions[] = 'pallet_number LIKE ?'; $params[] = "%$fPallet%"; }
+if ($vendor)  { $conditions[] = 'vendor_code = ?';      $params[] = $vendor; }
 
 $where = 'WHERE ' . implode(' AND ', $conditions);
 

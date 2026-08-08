@@ -75,6 +75,15 @@ $allowed = $isAuth ? (ROLE_ACCESS[$user['role']] ?? []) : [];
 
     <nav class="sidebar-nav">
       <div class="nav-section-label">Overview</div>
+      <?php if ($user['role'] === 'vendor'): ?>
+      <a href="#vendor-dashboard" class="nav-item" data-page="vendor-dashboard">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+          <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+          <rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
+        </svg>
+        Dashboard
+      </a>
+      <?php else: ?>
       <a href="#dashboard" class="nav-item" data-page="dashboard">
         <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
           <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
@@ -82,6 +91,7 @@ $allowed = $isAuth ? (ROLE_ACCESS[$user['role']] ?? []) : [];
         </svg>
         Dashboard
       </a>
+      <?php endif; ?>
 
       <?php if (canAccess('stock')): ?>
       <a href="#stock" class="nav-item" data-page="stock">
@@ -236,7 +246,8 @@ window.WMS = {
   allowed: <?= json_encode($allowed) ?>,
   csrf: "<?= $csrf ?>",
   productKgMap: <?= json_encode(PRODUCT_KG_MAP) ?>,
-  productPcsMap: <?= json_encode(PRODUCT_PCS_MAP) ?>
+  productPcsMap: <?= json_encode(PRODUCT_PCS_MAP) ?>,
+  vendorName: <?= $isAuth && $user['vendor_code'] ? json_encode(getVendorName($user['vendor_code'])) : 'null' ?>
 };
 </script>
 <script src="assets/js/app.js"></script>

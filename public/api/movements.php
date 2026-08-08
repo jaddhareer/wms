@@ -5,6 +5,7 @@
 require_once dirname(dirname(__DIR__)) . '/functions/bootstrap.php';
 
 requireModule('movements');
+$vendor = requireVendorScope();
 
 $pdo = getDB();
 
@@ -31,6 +32,7 @@ if ($fSource)   { $conditions[] = 't.source_location LIKE ?';    $params[] = "%$
 if ($fDest)     { $conditions[] = 't.destination_location LIKE ?'; $params[] = "%$fDest%"; }
 if ($fDateFrom) { $conditions[] = 'DATE(t.created_at) >= ?';     $params[] = $fDateFrom; }
 if ($fDateTo)   { $conditions[] = 'DATE(t.created_at) <= ?';     $params[] = $fDateTo; }
+if ($vendor)    { $conditions[] = 't.vendor_code = ?';           $params[] = $vendor; }
 
 $where = 'WHERE ' . implode(' AND ', $conditions);
 

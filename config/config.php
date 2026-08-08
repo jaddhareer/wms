@@ -7,7 +7,7 @@ defined('BASE_PATH') or die('Direct access not allowed');
 define('APP_NAME',        'WMS LSN');
 define('APP_VERSION',     '1.0.0');
 define('SESSION_TIMEOUT', 28800); // 8 hours
-define('JASCO_PALLET', '-');
+define('EXT_STAGING_PALLET', '-');
 
 // Product type → kg per carton
 define('PRODUCT_KG_MAP', [
@@ -46,8 +46,8 @@ define('TXN_PREFIX', [
 // Role → allowed modules
 define('ROLE_ACCESS', [
     'admin' => [
-        'dashboard','inbound','outbound','softcase','moving',
-        'stock','movements','softcase-monitoring','users'
+        'dashboard','vendor_dashboard','inbound','outbound','softcase','moving',
+        'stock','movements','softcase-monitoring','users','vendors'
     ],
     'supervisor' => [
         'dashboard','inbound','outbound','softcase','moving',
@@ -58,5 +58,8 @@ define('ROLE_ACCESS', [
     ],
     'softchecker' => [
         'dashboard','softcase','softcase-monitoring'
+    ],
+    'vendor' => [
+        'vendor-dashboard','moving','outbound'
     ],
 ]);

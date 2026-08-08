@@ -14,7 +14,7 @@ if ($method === 'GET') {
     if (!canAccess('users')) {
         jsonResponse(['success' => false, 'error' => 'Tidak memiliki akses'], 403);
     }
-    $stmt = $pdo->query("SELECT id, username, userid, role, created_at FROM users ORDER BY created_at ASC");
+    $stmt = $pdo->query("SELECT id, username, userid, role, vendor_code, created_at FROM users ORDER BY created_at ASC");
     jsonResponse(['success' => true, 'data' => $stmt->fetchAll()]);
 }
 
@@ -29,15 +29,16 @@ if ($action !== 'change_own_password' && !canAccess('users')) {
 switch ($action) {
     // ─── Create ────────────────────────────────────────────
     case 'create':
-        $username = sanitize(getInput('username', ''));
-        $userid   = sanitize(getInput('userid', ''));
-        $role     = sanitize(getInput('role', ''));
-        $password = getInput('password', '');
+        $username    = sanitize(getInput('username', ''));
+        $userid      = sanitize(getInput('userid', ''));
+        $role        = sanitize(getInput('role', ''));
+        $password    = getInput('password', '');
+        $vendor_code = sanitize(getInput('vendor_code', ''));
 
         if (!$username || !$userid || !$role || !$password) {
             jsonResponse(['success' => false, 'error' => 'Semua field wajib diisi']);
         }
-        if (!in_array($role, ['admin','supervisor','staff','softchecker'])) {
+        if (!in_array($role, ['admin','supervisor','staff','softchecker','vendor'])) {
             jsonResponse(['success' => false, 'error' => 'Role tidak valid']);
         }
         if (strlen($userid) > 10) {
@@ -46,6 +47,14 @@ switch ($action) {
         if (strlen($password) < 6) {
             jsonResponse(['success' => false, 'error' => 'Password minimal 6 karakter']);
         }
+        if ($role === 'vendor') {
+            if (!$vendor_code) jsonResponse(['success' => false, 'error' => 'Gudang vendor wajib dipilih']);
+            $chkV = $pdo->prepare("SELECT code FROM vendors WHERE code = ? AND is_active = 1");
+            $chkV->execute([$vendor_code]);
+            if (!$chkV->fetch()) jsonResponse(['success' => false, 'error' => 'Gudang vendor tidak valid']);
+        } else {
+            $vendor_code = null;
+        }
 
         // Check duplicate userid
         $chk = $pdo->prepare("SELECT id FROM users WHERE userid = ?");
@@ -53,21 +62,30 @@ switch ($action) {
         if ($chk->fetch()) jsonResponse(['success' => false, 'error' => 'UserID sudah digunakan']);
 
         $hash = password_hash($password, PASSWORD_BCRYPT, ['cost' => 12]);
-        $stmt = $pdo->prepare("INSERT INTO users (username, userid, role, password) VALUES (?, ?, ?, ?)");
-        $stmt->execute([$username, $userid, $role, $hash]);
+        $stmt = $pdo->prepare("INSERT INTO users (username, userid, role, vendor_code, password) VALUES (?, ?, ?, ?, ?)");
+        $stmt->execute([$username, $userid, $role, $vendor_code, $hash]);
         jsonResponse(['success' => true, 'message' => "User '$username' berhasil dibuat", 'id' => $pdo->lastInsertId()]);
 
     // ─── Update ────────────────────────────────────────────
     case 'update':
-        $id       = (int)getInput('id', 0);
-        $username = sanitize(getInput('username', ''));
-        $role     = sanitize(getInput('role', ''));
+        $id          = (int)getInput('id', 0);
+        $username    = sanitize(getInput('username', ''));
+        $role        = sanitize(getInput('role', ''));
+        $vendor_code = sanitize(getInput('vendor_code', ''));
 
         if (!$id || !$username || !$role) {
             jsonResponse(['success' => false, 'error' => 'ID, username, dan role wajib diisi']);
         }
-        if (!in_array($role, ['admin','supervisor','staff','softchecker'])) {
+        if (!in_array($role, ['admin','supervisor','staff','softchecker','vendor'])) {
             jsonResponse(['success' => false, 'error' => 'Role tidak valid']);
+        }
+        if ($role === 'vendor') {
+            if (!$vendor_code) jsonResponse(['success' => false, 'error' => 'Gudang vendor wajib dipilih']);
+            $chkV = $pdo->prepare("SELECT code FROM vendors WHERE code = ? AND is_active = 1");
+            $chkV->execute([$vendor_code]);
+            if (!$chkV->fetch()) jsonResponse(['success' => false, 'error' => 'Gudang vendor tidak valid']);
+        } else {
+            $vendor_code = null;
         }
 
         // Prevent demoting own account
@@ -76,8 +94,8 @@ switch ($action) {
             jsonResponse(['success' => false, 'error' => 'Tidak dapat mengubah role akun sendiri']);
         }
 
-        $stmt = $pdo->prepare("UPDATE users SET username = ?, role = ? WHERE id = ?");
-        $stmt->execute([$username, $role, $id]);
+        $stmt = $pdo->prepare("UPDATE users SET username = ?, role = ?, vendor_code = ? WHERE id = ?");
+        $stmt->execute([$username, $role, $vendor_code, $id]);
         jsonResponse(['success' => true, 'message' => 'User berhasil diupdate']);
 
     // ─── Reset password ────────────────────────────────────

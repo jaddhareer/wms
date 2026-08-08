@@ -66,18 +66,52 @@ try {
         $quantity    = $converted['ctn'];   // disimpan ke bin_locations (boleh desimal)
         $quantity_kg = $converted['kg'];
 
+        // Jika dari WH External: decrement bin spesifik yang dipilih (dihitung DULU, sebelum insert transaction)
+        $extVendorCode = null;
+        if ($isFromWHExternal) {
+            $ext_bin = sanitize($row['ext_bin'] ?? '');
+            if (!$ext_bin) {
+                $pdo->rollBack();
+                jsonResponse(['success' => false, 'error' => "Pilih bin sumber di WH External untuk batch=$batch"]);
+            }
+
+            $checkExt = $pdo->prepare("
+                SELECT quantity, vendor_code FROM bin_locations
+                WHERE batch = ? AND pallet_number = ? AND bin_location = ? AND location_type = 'WH External'
+                FOR UPDATE
+            ");
+            $checkExt->execute([$batch, EXT_STAGING_PALLET, $ext_bin]);
+            $extRow = $checkExt->fetch();
+
+            if (!$extRow || (float)$extRow['quantity'] < $quantity) {
+                $pdo->rollBack();
+                jsonResponse(['success' => false, 'error' => "Stok di $ext_bin tidak mencukupi untuk batch=$batch pallet=$pallet_number. Tersedia: " . ($extRow['quantity'] ?? 0) . ", diminta: $quantity"]);
+            }
+            $extVendorCode = $extRow['vendor_code'];
+
+            $decrExt = $pdo->prepare("
+                UPDATE bin_locations
+                SET quantity    = quantity - ?,
+                    quantity_kg = ROUND(quantity_kg - ?, 2),
+                    updated_at  = NOW()
+                WHERE batch = ? AND pallet_number = ? AND bin_location = ?
+            ");
+            $decrExt->execute([$quantity, $quantity_kg, $batch, EXT_STAGING_PALLET, $ext_bin]);
+        }
+
         // Insert transaction — sesuai input asli user
         $stmt = $pdo->prepare("
             INSERT INTO transactions
                 (transaction_id, movement_type, batch, pallet_number, quantity, uom, quantity_kg,
-                source_location, source_bin, destination_location, destination_bin, user_id, remarks, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+                source_location, source_bin, destination_location, destination_bin, vendor_code, user_id, remarks, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
         ");
         $stmt->execute([
             $txn_id, $movementType, $batch, $pallet_number, $input_qty, $row_uom, $quantity_kg,
             $isFromWHExternal ? 'WH External' : $inbound_from,
-            $isFromWHExternal ? 'Jasco' : null,
+            $isFromWHExternal ? $ext_bin : null,
             $row_storage, $bin_location,
+            $extVendorCode,
             $user['id'], $remarks
         ]);
 
@@ -94,31 +128,6 @@ try {
         $stmt2->execute([
             $batch, $pallet_number, $quantity, $ptype, $production_date, $quantity_kg, $bin_location, $storage_location
         ]);
-
-        // Jika dari WH External: decrement bin Jasco (logic sama, ganti $quantity dengan hasil konversi)
-        if ($isFromWHExternal) {
-            $checkJasco = $pdo->prepare("
-                SELECT quantity FROM bin_locations
-                WHERE batch = ? AND pallet_number = ? AND bin_location = 'Jasco'
-                FOR UPDATE
-            ");
-            $checkJasco->execute([$batch, JASCO_PALLET]);
-            $jascoQty = (float)$checkJasco->fetchColumn();
-
-            if ($jascoQty < $quantity) {
-                $pdo->rollBack();
-                jsonResponse(['success' => false, 'error' => "Stok Jasco tidak mencukupi untuk batch=$batch pallet=$pallet_number. Tersedia: $jascoQty, diminta: $quantity"]);
-            }
-
-            $decrJasco = $pdo->prepare("
-                UPDATE bin_locations
-                SET quantity    = quantity - ?,
-                    quantity_kg = ROUND(quantity_kg - ?, 2),
-                    updated_at  = NOW()
-                WHERE batch = ? AND pallet_number = ? AND bin_location = 'Jasco'
-            ");
-            $decrJasco->execute([$quantity, $quantity_kg, $batch, JASCO_PALLET]);
-        }
 
         $results[] = ['batch' => $batch, 'pallet' => $pallet_number, 'qty' => $input_qty, 'uom' => $row_uom];
     }

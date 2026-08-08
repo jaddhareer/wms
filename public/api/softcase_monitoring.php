@@ -43,11 +43,13 @@ $total      = (int)$countStmt->fetchColumn();
 $totalPages = (int)ceil($total / $limit);
 
 $dataStmt = $pdo->prepare("
-    SELECT s.id, s.batch, s.pallet_number, s.qty_checked, s.uom_checked,
-           s.qty_soft, s.uom_soft, s.remarks, s.checked_at,
-           b.quantity AS stock_qty, b.bin_location, b.production_date
+    SELECT s.batch, s.pallet_number, s.qty_checked, s.uom_checked,
+            s.qty_soft, s.uom_soft, s.remarks,
+            (SELECT b.production_date FROM bin_locations b
+                WHERE b.batch = s.batch AND b.pallet_number = s.pallet_number
+                LIMIT 1) AS production_date,
+            s.checked_at
     FROM softcase s
-    LEFT JOIN bin_locations b ON s.batch = b.batch AND s.pallet_number = b.pallet_number
     $where
     ORDER BY s.checked_at DESC
     LIMIT $limit OFFSET $offset

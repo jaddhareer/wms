@@ -56,12 +56,14 @@ function authLogin(string $userid, string $password): array {
         $_SESSION['username']     = $user['username'];
         $_SESSION['userid']       = $user['userid'];
         $_SESSION['role']         = $user['role'];
+        $_SESSION['vendor_code']  = $user['vendor_code'] ?? null;
         $_SESSION['last_activity']= time();
         return ['success' => true, 'user' => [
             'id'       => $user['id'],
             'username' => $user['username'],
             'userid'   => $user['userid'],
             'role'     => $user['role'],
+            'vendor_code' => $user['vendor_code'] ?? null,
         ]];
     }
     return ['success' => false, 'error' => 'UserID atau password salah'];
@@ -75,10 +77,11 @@ function authLogout(): void {
 
 function currentUser(): array {
     return [
-        'id'       => $_SESSION['user_id']  ?? 0,
-        'username' => $_SESSION['username'] ?? '',
-        'userid'   => $_SESSION['userid']   ?? '',
-        'role'     => $_SESSION['role']     ?? '',
+        'id'          => $_SESSION['user_id']     ?? 0,
+        'username'    => $_SESSION['username']    ?? '',
+        'userid'      => $_SESSION['userid']      ?? '',
+        'role'        => $_SESSION['role']        ?? '',
+        'vendor_code' => $_SESSION['vendor_code'] ?? null,
     ];
 }
 

@@ -10,6 +10,7 @@ require_once BASE_PATH . '/config/database.php';
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/csrf.php';
 require_once __DIR__ . '/helpers.php';
+require_once __DIR__ . '/vendor.php';
 
 // Exception handler terpusat: setiap error yang TIDAK ditangkap try/catch
 // Ini jaring pengaman lapis terakhir, bukan pengganti try/catch yang sudah ada, itu tetap perlu, karena butuh rollBack()

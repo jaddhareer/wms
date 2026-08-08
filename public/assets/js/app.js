@@ -185,14 +185,14 @@ function initNavigation() {
 }
 
 function navigate(page) {
-  if (!WMS.allowed.includes(page) && page !== 'dashboard') {
-    page = 'dashboard';
+  if (page === 'dashboard' && WMS.user?.role === 'vendor') page = 'vendor-dashboard';
+  const fallback = WMS.user?.role === 'vendor' ? 'vendor-dashboard' : 'dashboard';
+  if (!WMS.allowed.includes(page) && page !== 'dashboard' && page !== 'vendor-dashboard') {
+    page = fallback;
   }
-  // Set active nav
   qAll('.nav-item').forEach(a => a.classList.toggle('active', a.dataset.page === page));
-  // Set title
   const titles = {
-    dashboard: 'Dashboard', inbound: 'Inbound', outbound: 'Outbound',
+    dashboard: 'Dashboard', 'vendor-dashboard': 'Dashboard', inbound: 'Inbound', outbound: 'Outbound',
     softcase: 'Softcase Check', moving: 'Moving', stock: 'Stock Overview',
     movements: 'Movements', 'softcase-monitoring': 'Softcase Monitoring', users: 'User Management',
   };
@@ -201,7 +201,7 @@ function navigate(page) {
   const content = q('#mainContent');
   content.innerHTML = '<div class="page-loader"><div class="loader-ring"></div></div>';
 
-  const pages = { dashboard, inbound, outbound, softcase, moving, stock, movements, 'softcase-monitoring': softcaseMonitoring, users };
+  const pages = { dashboard, 'vendor-dashboard': vendorDashboard, inbound, outbound, softcase, moving, stock, movements, 'softcase-monitoring': softcaseMonitoring, users };
   const fn = pages[page];
   if (fn) fn(); else content.innerHTML = '<p style="color:var(--text-muted);padding:40px">Halaman tidak ditemukan.</p>';
 }
@@ -209,6 +209,55 @@ function navigate(page) {
 /* ═══════════════════════════════════════════════════════════
    DASHBOARD
    ═══════════════════════════════════════════════════════════ */
+async function vendorDashboard() {
+  const data = await api('vendor_dashboard.php');
+  if (!data.success) { showError(data.error); return; }
+  const { vendor, stats, stock, recent_in, recent_out } = data;
+
+  setContent(`
+    <div class="section">
+      <div class="grid grid-4" style="margin-bottom:16px">
+        ${statCard(vendor.name + ' - Okupansi', stats.occupied + ' Bin', `Kapasitas: ${stats.capacity}`,
+          `<div class="occ-bar"><div class="occ-fill ${stats.occupancy>=90?'danger':stats.occupancy>=70?'warning':''}"
+            style="width:${Math.min(stats.occupancy,100)}%"></div></div>
+           <div class="card-sub" style="margin-top:6px">Occupancy: ${stats.occupancy}%</div>`, svgBox())}
+      </div>
+
+      <div class="grid grid-2">
+        <div class="section">
+          <div class="section-header"><div class="section-title">Inbound — 7 Hari Terakhir</div></div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Batch</th><th>Qty</th><th>Tanggal</th></tr></thead>
+              <tbody>${recent_in.length ? recent_in.map(r => `<tr><td class="mono">${r.batch}</td><td class="mono">${fNum(r.quantity)} ${r.uom}</td><td class="mono txt-muted">${fDateTime(r.created_at)}</td></tr>`).join('') : '<tr class="empty-row"><td colspan="3">Belum ada</td></tr>'}</tbody>
+            </table>
+          </div>
+        </div>
+        <div class="section">
+          <div class="section-header"><div class="section-title">Outbound — 7 Hari Terakhir</div></div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Batch</th><th>Qty</th><th>Tujuan</th></tr></thead>
+              <tbody>${recent_out.length ? recent_out.map(r => `<tr><td class="mono">${r.batch}</td><td class="mono">${fNum(r.quantity)} ${r.uom}</td><td>${r.destination_location}</td></tr>`).join('') : '<tr class="empty-row"><td colspan="3">Belum ada</td></tr>'}</tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel" style="margin-bottom:16px">
+        <div class="panel-header"><div class="panel-title">Stok Saat Ini</div></div>
+        <div class="table-wrap" style="border:none;border-radius:0">
+          <table>
+            <thead><tr><th>Batch</th><th>Bin</th><th>Qty</th></tr></thead>
+            <tbody>${stock.length ? stock.map(s => `<tr><td class="mono">${s.batch}</td><td class="mono">${s.bin_location}</td><td>${fNum(s.quantity)} ${s.uom}</td></tr>`).join('') : '<tr class="empty-row"><td colspan="3">Tidak ada stok</td></tr>'}</tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+  `);
+}
+
 async function dashboard() {
   const data = await api('dashboard.php');
   if (!data.success) { showError(data.error); return; }
@@ -437,6 +486,8 @@ function statCard(title, value, sub, extra = '', icon = '') {
    ═══════════════════════════════════════════════════════════ */
 function inbound() {
   state.inboundRows = [];
+  state.selectedExtBin = null;
+  state.extStockCache = {};
   setContent(`
     <div class="grid" style="grid-template-columns:1 1fr;gap:20px">
       <div class="panel">
@@ -451,6 +502,7 @@ function inbound() {
                 <option value="WH External">
                 <option value="Customer Reject">
               </datalist>
+              <div id="ibExtBinHint" class="card-sub" style="margin-top:4px"></div>
             </div>
             <div class="field-group">
               <label class="field-label">Storage Location *</label>
@@ -516,38 +568,18 @@ function inbound() {
       </div>
     </div>
   `);
-  
+
   autoSelect();
 
-  // beberapa bantuan untuk input agar tidak manual semua
   q('#ibBatch')?.addEventListener('input', function() {
     this.value = this.value.toUpperCase();
     const code = this.value.slice(4, 6);
-    if(code === 'GV') {
-      q('#ibProductType').value = '500gr';
-      q('#ibUom').value = 'CTN';
-      q('#ibStorage').value = 'LSN Ambient';
-    }else if(code === 'GF') {
-      q('#ibProductType').value = 'CY';
-      q('#ibUom').value = 'CTN';
-      q('#ibStorage').value = 'LSN Chiller';
-    } else if(code === 'GB') {
-      q('#ibProductType').value = '10kg';
-      q('#ibUom').value = 'CTN';
-      q('#ibStorage').value = 'LSN Ambient';
-    }else if(code === 'GC') {
-      q('#ibProductType').value = '25kg';
-      q('#ibUom').value = 'BAG';
-      q('#ibStorage').value = 'LSN Ambient';
-    }else if(code === 'GA') {
-      q('#ibProductType').value = '5kg';
-      q('#ibUom').value = 'CTN';
-      q('#ibStorage').value = 'LSN Ambient';
-    }else {
-      q('#ibProductType').value = ''
-      q('#ibUom').value = 'CTN';
-      q('#ibStorage').value = 'LSN Ambient';
-    }
+    if(code === 'GV') { q('#ibProductType').value = '500gr'; q('#ibUom').value = 'CTN'; q('#ibStorage').value = 'LSN Ambient'; }
+    else if(code === 'GF') { q('#ibProductType').value = 'CY'; q('#ibUom').value = 'CTN'; q('#ibStorage').value = 'LSN Chiller'; }
+    else if(code === 'GB') { q('#ibProductType').value = '10kg'; q('#ibUom').value = 'CTN'; q('#ibStorage').value = 'LSN Ambient'; }
+    else if(code === 'GC') { q('#ibProductType').value = '25kg'; q('#ibUom').value = 'BAG'; q('#ibStorage').value = 'LSN Ambient'; }
+    else if(code === 'GA') { q('#ibProductType').value = '5kg'; q('#ibUom').value = 'CTN'; q('#ibStorage').value = 'LSN Ambient'; }
+    else { q('#ibProductType').value = ''; q('#ibUom').value = 'CTN'; q('#ibStorage').value = 'LSN Ambient'; }
     if (this.value.length >= 10) q('#ibPallet')?.focus();
   });
   q('#ibPallet')?.addEventListener('input', function() {
@@ -563,11 +595,11 @@ function inbound() {
     if (this.value.length >= 9) q('#ibAddBtn')?.focus();
   });
 
-  // kalkulasi dan autofill
   q('#ibQty')?.addEventListener('input', ibUpdateKgPreview);
   q('#ibUom')?.addEventListener('change', ibUpdateKgPreview);
   q('#ibProductType')?.addEventListener('change', ibUpdateKgPreview);
   q('#ibBatch').addEventListener('input', ibAutoFill);
+  q('#ibFrom').addEventListener('change', () => { q('#ibExtBinHint').textContent = ''; state.selectedExtBin = null; });
 
   function ibUpdateKgPreview() {
     const pt  = q('#ibProductType').value;
@@ -577,7 +609,7 @@ function inbound() {
     const r = convertQtyJs(pt, uom, qty);
     q('#ibQtyKgPreview').value = `${fNum(r.kg)} kg (${fNum(r.ctn)} CTN)`;
   }
-  
+
   async function ibAutoFill() {
     let productionDate = q('#ibProdDate').value;
     const batch = q('#ibBatch')?.value.trim();
@@ -585,26 +617,70 @@ function inbound() {
     const checkPD = await api(`bin_lookup.php?batch=${encodeURIComponent(batch)}`);
     if (checkPD.success && checkPD.data.length > 0 && checkPD.data[0].production_date) {
       productionDate = checkPD.data[0].production_date;
-      q('#ibProdDate').value = productionDate; // sync ke form
+      q('#ibProdDate').value = productionDate;
     }
 
     const isFromExt = q('#ibFrom').value === 'WH External';
     if(!isFromExt) return;
-    if(batch.length !== 10) return;
+
+    state.selectedExtBin = null;
+    q('#ibExtBinHint').textContent = '';
+
     const data = await api(`check_jasco.php?batch=${encodeURIComponent(batch)}`);
     if(!data.success || !data.data.length) return;
-    const jascoStock = data.data;
-    q('#ibProductType').value = jascoStock[0].product_type;
-    q('#ibUom').value = jascoStock[0].uom;
+    const extStock = data.data;
+    state.extStockCache[batch] = extStock;
+
+    q('#ibProductType').value = extStock[0].product_type;
+    q('#ibUom').value = extStock[0].uom;
     ibUpdateKgPreview();
+
+    if (extStock.length === 1) {
+      state.selectedExtBin = extStock[0].bin_location;
+      ibUpdateExtBinHint(batch, extStock[0].bin_location); 
+    } else {
+      openModal(`Pilih Bin Sumber di WH External — ${batch}`, `
+        <div style="display:flex;flex-direction:column;gap:8px">
+          ${extStock.map(b => `
+            <button class="btn btn-secondary" style="justify-content:flex-start;font-family:var(--font-mono)"
+              onclick="ibSelectExtBin('${b.batch}', '${b.bin_location}','${b.product_type}','${b.uom}','${b.vendor_name}',${b.quantity},event)">
+              ${b.vendor_name} — ${b.bin_location} — ${fNum(b.quantity)} ${b.uom}
+            </button>`).join('')}
+        </div>
+      `);
+    }
   }
+  window.ibSelectExtBin = (batch, bin, ptype, uom, vendorName, qty, e) => {
+    e.preventDefault();
+    state.selectedExtBin = bin;
+    q('#ibProductType').value = ptype;
+    q('#ibUom').value = uom;
+    ibUpdateExtBinHint(batch, bin);
+    closeModal();
+  };
 
   q('#ibAddBtn').addEventListener('click', ibAddRow);
   q('#ibClearBtn').addEventListener('click', () => { state.inboundRows = []; ibRenderTable(); });
   q('#ibSubmitBtn').addEventListener('click', ibSubmit);
-
-  // Enter key on last row input → add
   q('#ibBin').addEventListener('keydown', e => { if (e.key === 'Enter') ibAddRow(); });
+}
+
+function ibExtRemaining(batch, bin) {
+  const cache = state.extStockCache[batch] || [];
+  const original = cache.find(b => b.bin_location === bin);
+  if (!original) return null;
+  const used = state.inboundRows
+    .filter(r => r.batch === batch && r.ext_bin === bin)
+    .reduce((s, r) => s + Number(r.quantity), 0);
+  return { remaining: Math.max(0, Number(original.quantity) - used), vendorName: original.vendor_name, uom: original.uom };
+}
+
+function ibUpdateExtBinHint(batch, bin) {
+  const info = ibExtRemaining(batch, bin);
+  const hint = q('#ibExtBinHint');
+  if (!info) { hint.textContent = ''; return; }
+  hint.textContent = `Sumber: ${info.vendorName} — ${bin} (${fNum(info.remaining)} ${info.uom} tersisa)`;
+  hint.style.color = info.remaining <= 0 ? '#dc2626' : '';
 }
 
 async function ibAddRow() {
@@ -616,24 +692,29 @@ async function ibAddRow() {
   const storage = q('#ibStorage').value.trim();
   const ptype   = q('#ibProductType').value;
   const pdate   = q('#ibProdDate').value;
+  const isFromExt = from === 'WH External';
 
-  if (!from || !storage || !ptype || !pdate) { toast('Data esensial belum lengkap, lengkapi terlebih dahulu!', 'warning'); return; }
+  if (!from || pallet === '00' || !storage || !ptype || !pdate) { toast('Data esensial belum lengkap, lengkapi terlebih dahulu!', 'warning'); return; }
   if (!batch) { toast('Batch wajib diisi', 'warning'); q('#ibBatch').focus(); return; }
   if (qty <= 0) { toast('Quantity harus lebih dari 0', 'warning'); q('#ibQty').focus(); return; }
+  if (isFromExt && !state.selectedExtBin) { toast('Pilih bin sumber di WH External dulu (isi batch untuk autofill)', 'warning'); return; }
 
-  // Cek apakah batch + pallet sudah ada di database
-  let isFromExt = q('#ibFrom').value === 'WH External'
+  if (isFromExt) {
+    const info = ibExtRemaining(batch, state.selectedExtBin);
+    if (info && qty > info.remaining) {
+      toast(`Quantity melebihi sisa stok di ${state.selectedExtBin} (tersisa ${fNum(info.remaining)} ${info.uom})`, 'warning');
+      return;
+    }
+  }
+
   const check = await api(`check_inbound.php?batch=${encodeURIComponent(batch)}&pallet=${encodeURIComponent(pallet)}`);
-  if (!isFromExt && check.success && check.data.length > 0) {
+  if (check.success && check.data.length > 0) {
     const palls = check.data;
     openModal(`PERINGATAN`, `
       <div style="display:flex;flex-direction:column;gap:8px">
-        ${palls.map(b => `
-          Batch : ${b.batch} <br> Pallet : ${b.pallet_number} <br> sudah ada di ${b.location_type} ${b.bin_location}! <br> input Nomor Pallet yang sesuai!
-          `).join('')}
+        ${palls.map(b => `Batch : ${b.batch} <br> Pallet : ${b.pallet_number} <br> sudah ada di ${b.location_type} ${b.bin_location}! <br> input Nomor Pallet yang sesuai!`).join('')}
       </div>
     `);
-    
     q('#ibPallet').value = '';
     return;
   }
@@ -646,11 +727,13 @@ async function ibAddRow() {
     uom: q('#ibUom').value,
     bin_location: finalBin,
     production_date: pdate,
-    storage_location: storage
+    storage_location: storage,
+    ext_bin: isFromExt ? state.selectedExtBin : null,
   });
-    ibRenderTable();
+  ibRenderTable();
 
-  // Reset per-row fields, focus back to pallet
+  if (isFromExt) ibUpdateExtBinHint(batch, state.selectedExtBin);
+
   q('#ibPallet').value = '';
   q('#ibQty').value    = '';
   q('#ibBin').value    = '';
@@ -700,7 +783,12 @@ function ibRenderTable() {
     </tr>`).join('');
 }
 
-window.ibDeleteRow = (i) => { state.inboundRows.splice(i,1); ibRenderTable(); };
+window.ibDeleteRow = (i) => {
+  const removed = state.inboundRows[i];
+  state.inboundRows.splice(i,1);
+  ibRenderTable();
+  if (removed?.ext_bin) ibUpdateExtBinHint(removed.batch, removed.ext_bin);
+};
 
 async function ibSubmit() {
   if (!state.inboundRows.length) return;
@@ -722,10 +810,11 @@ async function ibSubmit() {
   if (res.success) {
     toast(res.message, 'success');
     state.inboundRows = [];
+    state.selectedExtBin = null;
     ibRenderTable();
-    // Reset header form
     ['ibFrom','ibStorage','ibBatch','ibPallet','ibQty','ibBin','ibRemarks'].forEach(id => { const el = q(`#${id}`); if(el) el.value=''; });
     q('#ibProductType').value = '';
+    q('#ibExtBinHint').textContent = '';
   } else {
     toast(res.error || 'Submit gagal', 'error');
   }
@@ -736,23 +825,35 @@ async function ibSubmit() {
    ═══════════════════════════════════════════════════════════ */
 function outbound() {
   state.outboundRows = [];
+  const isVendor = WMS.user.role === 'vendor';
+
+  const destOptions = isVendor
+    ? `<option value="">--Tujuan--</option>
+       <option value="Customer Lokal">Customer Lokal</option>
+       <option value="Customer Export">Customer Export</option>
+       <option value="Other">Tulis di remark</option>`
+    : `<option value="">--Tujuan--</option>
+       <option value="Customer Lokal">Customer Lokal</option>
+       <option value="Customer Export">Customer Export</option>
+       <option value="WH External">WH External</option>
+       <option value="Production">Production</option>
+       <option value="Other">Tulis di remark</option>`;
+
   setContent(`
     <div class="grid" style="grid-template-columns:1 1fr;gap:20px">
       <div class="panel">
-        <div class="panel-header"><div class="panel-title">Form Outbound</div></div>
+        <div class="panel-header"><div class="panel-title">Form Outbound${isVendor ? ' - ' + (WMS.vendorName||'') : ''}</div></div>
         <div class="panel-body">
           <div class="form-grid">
             <div class="field-group">
               <label class="field-label">Destination</label>
-              <select class="field-select" id="obDest">
-                <option value="">--Tujuan--</option>
-                <option value="Customer Lokal">Customer Lokal</option>
-                <option value="Customer Export">Customer Export</option>
-                <option value="WH External">WH External</option>
-                <option value="Production">Production</option>
-                <option value="Other">Tulis di remark</option>
-              </select> 
+              <select class="field-select" id="obDest">${destOptions}</select>
             </div>
+            ${!isVendor ? `
+            <div class="field-group hidden" id="obExtWarehouseGroup">
+              <label class="field-label">Pilih Gudang External *</label>
+              <select class="field-select" id="obExtWarehouse"><option value="">--Pilih--</option></select>
+            </div>` : ''}
           </div>
           <hr style="border:none;border-top:1px solid var(--border);margin:14px 0">
           <div class="form-grid">
@@ -794,10 +895,22 @@ function outbound() {
 
   autoSelect();
   q('#obAddBtn').addEventListener('click', obAddRow);
-
   q('#obBatch')?.addEventListener('input', obAutoFill);
 
-  // Autofill qty & bin dari batch + pallet
+  if (!isVendor) {
+    q('#obDest').addEventListener('change', async function() {
+      const showExt = this.value === 'WH External';
+      q('#obExtWarehouseGroup').classList.toggle('hidden', !showExt);
+      if (showExt) {
+        const res = await api('vendors.php');
+        if (res.success) {
+          q('#obExtWarehouse').innerHTML = '<option value="">--Pilih--</option>' +
+            res.data.map(v => `<option value="${v.code}">${v.name}</option>`).join('');
+        }
+      }
+    });
+  }
+
   async function obAutoFill() {
     if(this.value.length !== 10) return;
     const batch  = q('#obBatch')?.value.trim();
@@ -809,13 +922,12 @@ function outbound() {
       q('#obBin').value = bins[0].bin_location;
       q('#obQty').value = bins[0].quantity;
     } else {
-      // Multiple bins: tampilkan pilihan
       openModal(`Pilih Bin — ${batch}`, `
         <div style="display:flex;flex-direction:column;gap:8px">
           ${bins.map(b => {
             const isAdded = state.outboundRows.some(r => r.batch === b.batch && r.pallet === b.pallet_number);
             return `
-              <button class="btn btn-secondary" 
+              <button class="btn btn-secondary"
                 style="justify-content:flex-start;font-family:var(--font-mono);${isAdded ? 'opacity:.4;cursor:not-allowed' : ''}"
                 onclick="${isAdded ? '' : `obFillBin('${b.pallet_number}','${b.bin_location}',${b.quantity},event)`}"
                 ${isAdded ? 'disabled' : ''}>
@@ -892,9 +1004,10 @@ async function obSubmit() {
   btn.disabled = true; btn.innerHTML = svgSpinner() + ' Submitting...';
 
   const res = await api('outbound.php', 'POST', {
-    destination:  q('#obDest').value.trim(),
-    remarks:      q('#obRemarks').value.trim(),
-    rows:         state.outboundRows,
+    destination:   q('#obDest').value.trim(),
+    ext_warehouse: q('#obExtWarehouse')?.value.trim() || '',
+    remarks:       q('#obRemarks').value.trim(),
+    rows:          state.outboundRows,
   });
 
   btn.disabled = false; btn.innerHTML = svgSend() + ' Submit Outbound';
@@ -902,6 +1015,7 @@ async function obSubmit() {
   if (res.success) {
     toast(res.message, 'success'); state.outboundRows = []; obRenderTable();
     ['obDest','obBatch','obPallet','obQty','obBin','obRemarks'].forEach(id => { const el=q(`#${id}`); if(el) el.value=''; });
+    q('#obExtWarehouseGroup')?.classList.add('hidden');
   } else {
     toast(res.error || 'Submit gagal', 'error');
   }
@@ -1015,18 +1129,28 @@ async function scSubmit() {
    MOVING
    ═══════════════════════════════════════════════════════════ */
 function moving() {
+  const isVendor = WMS.user.role === 'vendor';
+  const vendorName = WMS.vendorName || '';
+
   setContent(`
     <div class="panel" style="max-width:600px">
-      <div class="panel-header"><div class="panel-title">Moving (Bin to Bin)</div></div>
+      <div class="panel-header"><div class="panel-title">Moving${isVendor ? ' - ' + vendorName : ' (Bin to Bin)'}</div></div>
       <div class="panel-body">
         <div id="mvResult"></div>
         <div class="form-row">
-          <div class="field-group"><label class="field-label">Source Bin *</label><input id="mvSrc" class="field-input" placeholder="A-01-A-01"></div>
-          <div class="field-group"><label class="field-label">Destination Bin *</label><input id="mvDst" class="field-input" placeholder="B-01-A-01"></div>
+          <div class="field-group"><label class="field-label">Source Bin *</label>
+            <input id="mvSrc" class="field-input" placeholder="${isVendor ? 'Ketik batch utk autofill' : 'A-01-A-01'}"></div>
+          <div class="field-group"><label class="field-label">Destination Bin *</label>
+            ${isVendor ? `
+            <div style="display:flex">
+              <span style="padding:0 10px;display:flex;align-items:center;background:var(--surface-2);border:1px solid var(--border);border-right:none;border-radius:6px 0 0 6px;font-family:var(--font-mono);font-size:13px;color:var(--text-muted);white-space:nowrap">${vendorName}</span>
+              <input id="mvDst" class="field-input" style="border-radius:0 6px 6px 0" placeholder="A1 / STAGE">
+            </div>` : `<input id="mvDst" class="field-input" placeholder="B-01-A-01">`}
+          </div>
         </div>
         <div class="form-row">
           <div class="field-group"><label class="field-label">Batch *</label><input id="mvBatch" class="field-input" placeholder="Batch number"></div>
-          <div class="field-group"><label class="field-label">Pallet *</label><input id="mvPallet" class="field-input" placeholder="01" maxlength="3"></div>
+          ${isVendor ? '' : `<div class="field-group"><label class="field-label">Pallet *</label><input id="mvPallet" class="field-input" placeholder="01" maxlength="3"></div>`}
         </div>
         <div class="form-row">
           <div class="field-group"><label class="field-label">Quantity *</label><input id="mvQty" class="field-input" type="number" min="1" placeholder="0"></div>
@@ -1045,9 +1169,8 @@ function moving() {
   autoSelect();
   q('#mvSubmitBtn').addEventListener('click', mvSubmit);
 
-  // Autofill dari source bin (trigger ketika length = 9)
   q('#mvSrc')?.addEventListener('input', async function() {
-    if (this.value.length !== 9) return;
+    if (isVendor || this.value.length !== 9) return;
     const data = await api(`bin_lookup.php?bin=${encodeURIComponent(this.value)}`);
     if (!data.success || !data.data.length) return;
     const bins = data.data;
@@ -1081,26 +1204,25 @@ function moving() {
     const data = await api(`bin_lookup.php?batch=${encodeURIComponent(batch)}`);
     if (!data.success || !data.data.length) return;
     const bins = data.data;
-      if (bins.length === 1) {
-        q('#mvPallet').value = bins[0].pallet_number;
-        q('#mvSrc').value = bins[0].bin_location;
-        q('#mvQty').value = bins[0].quantity;
-      } else {
-        // Multiple bins: tampilkan pilihan
-        openModal(`Pilih No. Pallet & Bin — ${batch}`, `
-          <div style="display:flex;flex-direction:column;gap:8px">
-            ${bins.map(b => `
-              <button class="btn btn-secondary" style="justify-content:flex-start;font-family:var(--font-mono)"
-                onclick="mvFillBin('${b.pallet_number}','${b.bin_location}',${b.quantity},event)">
-                ${b.pallet_number} - ${b.bin_location} - ${fNum(b.quantity)} ${b.uom}
-              </button>`).join('')}
-          </div>
-        `);
-      }
+    if (bins.length === 1) {
+      if (!isVendor) q('#mvPallet').value = bins[0].pallet_number;
+      q('#mvSrc').value = bins[0].bin_location;
+      q('#mvQty').value = bins[0].quantity;
+    } else {
+      openModal(`Pilih ${isVendor ? 'Bin' : 'No. Pallet & Bin'} — ${batch}`, `
+        <div style="display:flex;flex-direction:column;gap:8px">
+          ${bins.map(b => `
+            <button class="btn btn-secondary" style="justify-content:flex-start;font-family:var(--font-mono)"
+              onclick="mvFillBin('${b.pallet_number}','${b.bin_location}',${b.quantity},event)">
+              ${isVendor ? '' : b.pallet_number + ' - '}${b.bin_location} - ${fNum(b.quantity)} ${b.uom}
+            </button>`).join('')}
+        </div>
+      `);
+    }
   }
   window.mvFillBin = (pallet, bin, qty, e) => {
     e.preventDefault();
-    q('#mvPallet').value = pallet;
+    if (!isVendor) q('#mvPallet').value = pallet;
     q('#mvSrc').value = bin;
     q('#mvQty').value = qty;
     closeModal();
@@ -1115,18 +1237,21 @@ function moving() {
 }
 
 async function mvSubmit() {
+  const isVendor = WMS.user.role === 'vendor';
   const btn = q('#mvSubmitBtn');
   btn.disabled = true; btn.innerHTML = svgSpinner() + ' Submitting...';
 
-  const res = await api('moving.php', 'POST', {
+  const payload = {
     source_bin:      q('#mvSrc').value.trim(),
     destination_bin: q('#mvDst').value.trim() || 'STAGE',
     batch:           q('#mvBatch').value.trim(),
-    pallet:          q('#mvPallet').value.trim(),
+    pallet:          isVendor ? '' : q('#mvPallet').value.trim(),
     quantity:        parseFloat(q('#mvQty').value) || 0,
     uom:             q('#mvUom').value,
     remarks:         q('#mvRemarks').value.trim(),
-  });
+  };
+
+  const res = await api('moving.php', 'POST', payload);
 
   btn.disabled = false; btn.innerHTML = svgSend() + ' Submit Moving';
   const resultDiv = q('#mvResult');
@@ -1555,6 +1680,8 @@ async function users() {
   const data = await api('users.php', 'GET');
   if (!data.success) { showError(data.error); return; }
 
+  const roleBadge = r => r==='admin'?'badge-red':r==='supervisor'?'badge-amber':r==='staff'?'badge-blue':r==='vendor'?'badge-green':'badge-gray';
+
   setContent(`
     <div class="section-header" style="margin-bottom:16px">
       <div class="section-title">Daftar User</div>
@@ -1563,23 +1690,24 @@ async function users() {
     <div class="panel">
       <div class="table-wrap" style="border:none;border-radius:0">
         <table>
-          <thead><tr><th>#</th><th>Username</th><th>User ID</th><th>Role</th><th>Dibuat</th><th>Aksi</th></tr></thead>
+          <thead><tr><th>#</th><th>Username</th><th>User ID</th><th>Role</th><th>Gudang</th><th>Dibuat</th><th>Aksi</th></tr></thead>
           <tbody>
             ${data.data.length ? data.data.map((u,i) => `
               <tr>
                 <td class="mono txt-muted">${i+1}</td>
                 <td><strong>${escHtml(u.username)}</strong></td>
                 <td class="mono">${u.userid}</td>
-                <td><span class="badge ${u.role==='admin'?'badge-red':u.role==='supervisor'?'badge-amber':u.role==='staff'?'badge-blue':'badge-gray'}">${u.role}</span></td>
+                <td><span class="badge ${roleBadge(u.role)}">${u.role}</span></td>
+                <td class="mono txt-muted">${u.vendor_code || '-'}</td>
                 <td class="mono txt-muted">${fDateTime(u.created_at)}</td>
                 <td>
                   <div style="display:flex;gap:6px">
-                    <button class="btn btn-secondary btn-sm" onclick="usEdit(${u.id},'${escHtml(u.username)}','${u.role}')">Edit</button>
+                    <button class="btn btn-secondary btn-sm" onclick="usEdit(${u.id},'${escHtml(u.username)}','${u.role}','${u.vendor_code||''}')">Edit</button>
                     <button class="btn btn-secondary btn-sm" onclick="usResetPwd(${u.id},'${escHtml(u.username)}')">Reset Pwd</button>
                     ${u.userid !== WMS.user.userid ? `<button class="btn btn-danger btn-sm" onclick="usDelete(${u.id},'${escHtml(u.username)}')">Hapus</button>` : ''}
                   </div>
                 </td>
-              </tr>`).join('') : '<tr class="empty-row"><td colspan="6">Tidak ada user</td></tr>'}
+              </tr>`).join('') : '<tr class="empty-row"><td colspan="7">Tidak ada user</td></tr>'}
           </tbody>
         </table>
       </div>
@@ -1587,6 +1715,14 @@ async function users() {
   `);
 
   q('#usCreateBtn').addEventListener('click', usCreate);
+}
+
+async function loadVendorOptions(selectEl, selectedCode = '') {
+  const res = await api('vendors.php');
+  if (res.success) {
+    selectEl.innerHTML = '<option value="">--Pilih--</option>' +
+      res.data.map(v => `<option value="${v.code}" ${v.code===selectedCode?'selected':''}>${v.name}</option>`).join('');
+  }
 }
 
 function usCreate() {
@@ -1602,9 +1738,14 @@ function usCreate() {
           <option value="">-- Pilih --</option>
           <option value="admin">Admin</option><option value="supervisor">Supervisor</option>
           <option value="staff">Staff</option><option value="softchecker">Softchecker</option>
+          <option value="vendor">Vendor</option>
         </select>
       </div>
       <div class="field-group"><label class="field-label">Password *</label><input id="muPassword" class="field-input" type="password" placeholder="Min 6 karakter"></div>
+    </div>
+    <div class="field-group hidden" id="muVendorGroup">
+      <label class="field-label">Gudang Vendor *</label>
+      <select id="muVendorCode" class="field-select"><option value="">--Pilih--</option></select>
     </div>
     <div class="form-actions">
       <button class="btn btn-primary" id="muSubmitBtn">${svgSend()} Simpan</button>
@@ -1612,16 +1753,28 @@ function usCreate() {
     </div>
   `);
   autoSelect();
+  q('#muRole').addEventListener('change', async function() {
+    const show = this.value === 'vendor';
+    q('#muVendorGroup').classList.toggle('hidden', !show);
+    if (show) await loadVendorOptions(q('#muVendorCode'));
+  });
   q('#muSubmitBtn').addEventListener('click', async () => {
     const btn = q('#muSubmitBtn'); btn.disabled=true;
-    const res = await api('users.php', 'POST', { action:'create', username: q('#muUsername').value.trim(), userid: q('#muUserid').value.trim(), role: q('#muRole').value, password: q('#muPassword').value });
+    const res = await api('users.php', 'POST', {
+      action:'create',
+      username: q('#muUsername').value.trim(),
+      userid: q('#muUserid').value.trim(),
+      role: q('#muRole').value,
+      password: q('#muPassword').value,
+      vendor_code: q('#muVendorCode')?.value || '',
+    });
     btn.disabled=false;
     if (res.success) { toast(res.message,'success'); closeModal(); users(); }
     else q('#usModalResult').innerHTML = `<div class="form-error">${res.error}</div>`;
   });
 }
 
-window.usEdit = (id, username, role) => {
+window.usEdit = (id, username, role, vendorCode) => {
   openModal('Edit User', `
     <div id="usModalResult"></div>
     <div class="field-group"><label class="field-label">Username *</label><input id="muUsername" class="field-input" value="${escHtml(username)}"></div>
@@ -1631,7 +1784,12 @@ window.usEdit = (id, username, role) => {
         <option value="supervisor" ${role==='supervisor'?'selected':''}>Supervisor</option>
         <option value="staff" ${role==='staff'?'selected':''}>Staff</option>
         <option value="softchecker" ${role==='softchecker'?'selected':''}>Softchecker</option>
+        <option value="vendor" ${role==='vendor'?'selected':''}>Vendor</option>
       </select>
+    </div>
+    <div class="field-group ${role==='vendor'?'':'hidden'}" id="muVendorGroup">
+      <label class="field-label">Gudang Vendor *</label>
+      <select id="muVendorCode" class="field-select"><option value="">--Pilih--</option></select>
     </div>
     <div class="form-actions">
       <button class="btn btn-primary" id="muSubmitBtn">Simpan</button>
@@ -1639,9 +1797,20 @@ window.usEdit = (id, username, role) => {
     </div>
   `);
   autoSelect();
+  if (role === 'vendor') loadVendorOptions(q('#muVendorCode'), vendorCode);
+  q('#muRole').addEventListener('change', async function() {
+    const show = this.value === 'vendor';
+    q('#muVendorGroup').classList.toggle('hidden', !show);
+    if (show) await loadVendorOptions(q('#muVendorCode'), vendorCode);
+  });
   q('#muSubmitBtn').addEventListener('click', async () => {
     const btn = q('#muSubmitBtn'); btn.disabled=true;
-    const res = await api('users.php', 'POST', { action:'update', id, username: q('#muUsername').value.trim(), role: q('#muRole').value });
+    const res = await api('users.php', 'POST', {
+      action:'update', id,
+      username: q('#muUsername').value.trim(),
+      role: q('#muRole').value,
+      vendor_code: q('#muVendorCode')?.value || '',
+    });
     btn.disabled=false;
     if (res.success) { toast(res.message,'success'); closeModal(); users(); }
     else q('#usModalResult').innerHTML = `<div class="form-error">${res.error}</div>`;

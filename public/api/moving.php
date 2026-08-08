@@ -11,14 +11,28 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     jsonResponse(['success' => false, 'error' => 'Method not allowed'], 405);
 }
 
+$user   = currentUser();
+$vendor = requireVendorScope(); // '' kalau bukan vendor
+
 // ─── Input ─────────────────────────────────────────────────
-$source_bin   = sanitize(getInput('source_bin', ''));
-$dest_bin     = sanitize(getInput('destination_bin', ''));
-$batch        = sanitize(getInput('batch', ''));
-$pallet       = palletFormat(getInput('pallet', '01'));
-$rawQty       = (float)getInput('quantity', 0);
-$uom          = sanitize(getInput('uom', 'CTN'));
-$remarks      = sanitize(getInput('remarks', ''));
+$batch   = sanitize(getInput('batch', ''));
+$rawQty  = (float)getInput('quantity', 0);
+$uom     = sanitize(getInput('uom', 'CTN'));
+$remarks = sanitize(getInput('remarks', ''));
+
+if ($vendor) {
+    // Vendor: Source Bin biarkan apa adanya (hasil autofill, sudah full string spt "Jasco STAGE").
+    // Destination Bin: user ketik kode lokal ("A1"), backend nambahin prefix nama gudang kalau belum ada.
+    $vendorName = getVendorName($vendor);
+    $source_bin = sanitize(getInput('source_bin', ''));
+    $localDst   = sanitize(getInput('destination_bin', ''));
+    $dest_bin   = (stripos($localDst, $vendorName) === 0) ? $localDst : trim("$vendorName $localDst");
+    $pallet     = EXT_STAGING_PALLET; // vendor tidak pakai nomor pallet ala LSN
+} else {
+    $source_bin = sanitize(getInput('source_bin', ''));
+    $dest_bin   = sanitize(getInput('destination_bin', ''));
+    $pallet     = palletFormat(getInput('pallet', '01'));
+}
 
 // ─── Validation ────────────────────────────────────────────
 if (!$source_bin || !$dest_bin || !$batch || !$pallet || $rawQty <= 0) {
@@ -28,30 +42,35 @@ if ($source_bin === $dest_bin) {
     jsonResponse(['success' => false, 'error' => 'Source dan destination bin tidak boleh sama']);
 }
 
-$user = currentUser();
-$pdo  = getDB();
+$pdo = getDB();
 
 try {
     $pdo->beginTransaction();
 
-    // Lock and check source
     $srcStmt = $pdo->prepare("
-        SELECT id, quantity, quantity_kg, uom, product_type, production_date, location_type FROM bin_locations
+        SELECT id, quantity, quantity_kg, uom, product_type, production_date, location_type, vendor_code
+        FROM bin_locations
         WHERE batch = ? AND pallet_number = ? AND bin_location = ?
         FOR UPDATE
     ");
     $srcStmt->execute([$batch, $pallet, $source_bin]);
-
     $src = $srcStmt->fetch();
+
     if (!$src) {
         $pdo->rollBack();
         jsonResponse(['success' => false, 'error' => "Stok tidak ditemukan: batch=$batch pallet=$pallet bin=$source_bin"]);
     }
-    if ($src['location_type'] === 'WH External') {
+
+    if ($vendor) {
+        if ($src['vendor_code'] !== $vendor) {
+            $pdo->rollBack();
+            jsonResponse(['success' => false, 'error' => 'Bin ini bukan milik gudang Anda'], 403);
+        }
+    } elseif ($src['location_type'] === 'WH External') {
         $pdo->rollBack();
-        jsonResponse(['success' => false, 'error' => "Stok masih ada di WH External, lakukan Inbound dari WH External terlabih dahulu"]);
+        jsonResponse(['success' => false, 'error' => "Stok masih ada di WH External, lakukan Inbound dari WH External terlebih dahulu"]);
     }
-    
+
     $converted = convertToCtnKg($src['product_type'] ?? '', $uom, $rawQty);
     $quantity  = $converted['ctn'];
     $moveKg    = $converted['kg'];
@@ -64,24 +83,22 @@ try {
         ]);
     }
 
-    // Generate transaction ID
     $txn_id = generateTxnId('moving', $pdo);
 
-    // Insert transaction
     $stmt = $pdo->prepare("
         INSERT INTO transactions
             (transaction_id, movement_type, batch, pallet_number, quantity, uom, quantity_kg,
-            source_location, source_bin, destination_location, destination_bin, user_id, remarks, created_at)
-        VALUES (?, 'moving', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+            source_location, source_bin, destination_location, destination_bin, vendor_code, user_id, remarks, created_at)
+        VALUES (?, 'moving', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
     ");
     $stmt->execute([
         $txn_id, $batch, $pallet, $quantity, $uom, $moveKg,
         $src['location_type'], $source_bin,
         $src['location_type'], $dest_bin,
+        $src['vendor_code'],
         $user['id'], $remarks
     ]);
 
-    // Decrement source bin
     $decrStmt = $pdo->prepare("
         UPDATE bin_locations
         SET quantity    = quantity - ?,
@@ -91,11 +108,10 @@ try {
     ");
     $decrStmt->execute([$quantity, $moveKg, $batch, $pallet, $source_bin]);
 
-    // Increment (upsert) destination bin
     $incrStmt = $pdo->prepare("
         INSERT INTO bin_locations
-            (batch, pallet_number, quantity, uom, product_type, production_date, quantity_kg, bin_location, location_type, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+            (batch, pallet_number, quantity, uom, product_type, production_date, quantity_kg, bin_location, location_type, vendor_code, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
         ON DUPLICATE KEY UPDATE
             quantity    = quantity + ?,
             quantity_kg = ROUND(quantity_kg + ?, 2),
@@ -103,7 +119,7 @@ try {
     ");
     $incrStmt->execute([
         $batch, $pallet, $quantity, $src['uom'] ?: $uom, $src['product_type'],
-        $src['production_date'], $moveKg, $dest_bin, $src['location_type'] ?? null,
+        $src['production_date'], $moveKg, $dest_bin, $src['location_type'] ?? null, $src['vendor_code'],
         $quantity, $moveKg
     ]);
 
