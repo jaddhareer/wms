@@ -61,6 +61,7 @@ function dispatchExport(string $title, array $headers, array $rows, string $file
 
 // ─── Stock Export ────────────────────────────────────────────
 function exportStock(PDO $pdo): void {
+    $vendor = requireVendorScope();
     $conditions = ['quantity > 0'];
     $params     = [];
 
@@ -68,6 +69,7 @@ function exportStock(PDO $pdo): void {
     if (!empty($_GET['pallet_number'])) { $conditions[] = 'pallet_number LIKE ?'; $params[] = '%'.$_GET['pallet_number'].'%'; }
     if (!empty($_GET['bin_location']))  { $conditions[] = 'bin_location LIKE ?';  $params[] = '%'.$_GET['bin_location'].'%'; }
     if (!empty($_GET['location_type'])) { $conditions[] = 'location_type LIKE ?'; $params[] = '%'.$_GET['location_type'].'%'; }
+    if ($vendor)                        { $conditions[] = 'vendor_code = ?';      $params[] = $vendor; }
 
     $where = 'WHERE ' . implode(' AND ', $conditions);
     $stmt = $pdo->prepare("
@@ -85,16 +87,18 @@ function exportStock(PDO $pdo): void {
 
 // ─── Movements Export ────────────────────────────────────────
 function exportMovements(PDO $pdo): void {
+    $vendor = requireVendorScope();
     $conditions = ['1=1'];
     $params     = [];
 
-    if (!empty($_GET['movement_type'])) { $conditions[] = 't.movement_type = ?';         $params[] = $_GET['movement_type']; }
+    if (!empty($_GET['movement_type'])) { $conditions[] = 't.movement_type = ?';          $params[] = $_GET['movement_type']; }
     if (!empty($_GET['batch']))         { $conditions[] = 't.batch LIKE ?';               $params[] = '%'.$_GET['batch'].'%'; }
     if (!empty($_GET['transaction_id'])){ $conditions[] = 't.transaction_id LIKE ?';      $params[] = '%'.$_GET['transaction_id'].'%'; }
     if (!empty($_GET['source']))        { $conditions[] = 't.source_location LIKE ?';     $params[] = '%'.$_GET['source'].'%'; }
     if (!empty($_GET['destination']))   { $conditions[] = 't.destination_location LIKE ?';$params[] = '%'.$_GET['destination'].'%'; }
     if (!empty($_GET['date_from']))     { $conditions[] = 'DATE(t.created_at) >= ?';      $params[] = $_GET['date_from']; }
     if (!empty($_GET['date_to']))       { $conditions[] = 'DATE(t.created_at) <= ?';      $params[] = $_GET['date_to']; }
+    if ($vendor)                        { $conditions[] = 't.vendor_code = ?';            $params[] = $vendor; }
 
     $where = 'WHERE ' . implode(' AND ', $conditions);
     $stmt  = $pdo->prepare("

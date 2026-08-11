@@ -60,6 +60,6 @@ define('ROLE_ACCESS', [
         'dashboard','softcase','softcase-monitoring'
     ],
     'vendor' => [
-        'vendor-dashboard','moving','outbound'
+        'vendor-dashboard','moving','outbound','stock','movements'
     ],
 ]);

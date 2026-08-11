@@ -80,10 +80,10 @@ try {
             $ins = $pdo->prepare("
                 INSERT INTO transactions
                     (transaction_id, movement_type, batch, pallet_number, quantity, uom, quantity_kg,
-                     source_location, source_bin, destination_location, destination_bin, user_id, remarks, created_at)
-                VALUES (?, 'outbound', ?, ?, ?, ?, ?, ?, ?, 'CANCELLATION', NULL, ?, ?, NOW())
+                     source_location, source_bin, destination_location, destination_bin, vendor_code, user_id, remarks, created_at)
+                VALUES (?, 'outbound', ?, ?, ?, ?, ?, ?, ?, 'CANCELLATION', NULL, ?, ?, ?, NOW())
             ");
-            $ins->execute([$newTxnId, $batch, $pallet, $qty, $r['uom'], $qtyKg, $r['destination_location'], $r['destination_bin'], $me['id'], "Pembatalan TXN: $txn_id"]);
+            $ins->execute([$newTxnId, $batch, $pallet, $qty, $r['uom'], $qtyKg, $r['destination_location'], $r['destination_bin'], $r['vendor_code'], $me['id'], "Pembatalan TXN: $txn_id"]);
 
         } elseif ($originalType === 'outbound') {
             if (!$pallet || !$r['source_bin']) {
@@ -116,10 +116,10 @@ try {
             $ins = $pdo->prepare("
                 INSERT INTO transactions
                     (transaction_id, movement_type, batch, pallet_number, quantity, uom, quantity_kg,
-                     source_location, source_bin, destination_location, destination_bin, user_id, remarks, created_at)
-                VALUES (?, 'inbound', ?, ?, ?, ?, ?, 'CANCELLATION', NULL, ?, ?, ?, ?, NOW())
+                     source_location, source_bin, destination_location, destination_bin, vendor_code, user_id, remarks, created_at)
+                VALUES (?, 'inbound', ?, ?, ?, ?, ?, 'CANCELLATION', NULL, ?, ?, ?, ?, ?, NOW())
             ");
-            $ins->execute([$newTxnId, $batch, $pallet, $qty, $r['uom'], $qtyKg, $r['source_location'], $r['source_bin'], $me['id'], "Pembatalan TXN: $txn_id"]);
+            $ins->execute([$newTxnId, $batch, $pallet, $qty, $r['uom'], $qtyKg, $r['source_location'], $r['source_bin'], $r['vendor_code'], $me['id'], "Pembatalan TXN: $txn_id"]);
 
         } elseif ($originalType === 'moving') {
             if (!$pallet) {
@@ -127,10 +127,10 @@ try {
                 jsonResponse(['success' => false, 'error' => "Data lama tanpa pallet, batch $batch tidak dapat dibatalkan otomatis"]);
             }
 
-            // Kalau moving ini sebenarnya outbound ke WH External, bin Jasco-nya
-            // pakai pallet_number global (JASCO_PALLET), bukan pallet asli.
-            $isJascoLeg = ($r['destination_location'] === 'WH External' && $r['destination_bin'] === 'Jasco');
-            $destPallet = $isJascoLeg ? JASCO_PALLET : $pallet;
+            // Kalau salah satu sisi (source/destination) adalah WH External, bin di sisi itu
+            // selalu pakai EXT_STAGING_PALLET (placeholder pallet vendor), bukan pallet_number transaksi asli.
+            $destPallet = ($r['destination_location'] === 'WH External') ? EXT_STAGING_PALLET : $pallet;
+            $srcPallet  = ($r['source_location'] === 'WH External') ? EXT_STAGING_PALLET : $pallet;
 
             $check = $pdo->prepare("SELECT quantity FROM bin_locations WHERE batch=? AND pallet_number=? AND bin_location=? FOR UPDATE");
             $check->execute([$batch, $destPallet, $r['destination_bin']]);
@@ -169,19 +169,19 @@ try {
                     quantity_kg = ROUND(quantity_kg + VALUES(quantity_kg), 2),
                     updated_at  = NOW()
             ");
-            $incr->execute([$batch, $pallet, $qty, $r['uom'], $productType, $productionDate, $qtyKg, $r['source_bin'], $r['source_location']]);
+            $incr->execute([$batch, $srcPallet, $qty, $r['uom'], $productType, $productionDate, $qtyKg, $r['source_bin'], $r['source_location']]);
 
             $ins = $pdo->prepare("
                 INSERT INTO transactions
                     (transaction_id, movement_type, batch, pallet_number, quantity, uom, quantity_kg,
-                     source_location, source_bin, destination_location, destination_bin, user_id, remarks, created_at)
-                VALUES (?, 'moving', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+                     source_location, source_bin, destination_location, destination_bin, vendor_code, user_id, remarks, created_at)
+                VALUES (?, 'moving', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
             ");
             $ins->execute([
                 $newTxnId, $batch, $pallet, $qty, $r['uom'], $qtyKg,
                 $r['destination_location'], $r['destination_bin'],
                 $r['source_location'], $r['source_bin'],
-                $me['id'], "Pembatalan TXN: $txn_id"
+                $r['vendor_code'], $me['id'], "Pembatalan TXN: $txn_id"
             ]);
         }
     }
