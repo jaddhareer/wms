@@ -22,11 +22,21 @@ $fDest     = sanitize($_GET['destination']   ?? '');
 $fDateFrom = sanitize($_GET['date_from']     ?? '');
 $fDateTo   = sanitize($_GET['date_to']       ?? '');
 
+// Nilai jamak dipisah koma, contoh: "inbound,outbound"
+$fTypes   = $fType  !== '' ? array_filter(array_map('trim', explode(',', $fType)))  : [];
+$fBatches = $fBatch !== '' ? array_filter(array_map('trim', explode(',', $fBatch))) : [];
+
 $conditions = ['1=1'];
 $params     = [];
 
-if ($fType)     { $conditions[] = 't.movement_type = ?';         $params[] = $fType; }
-if ($fBatch)    { $conditions[] = 't.batch LIKE ?';              $params[] = "%$fBatch%"; }
+if ($fTypes) {
+    $conditions[] = 't.movement_type IN (' . implode(',', array_fill(0, count($fTypes), '?')) . ')';
+    array_push($params, ...$fTypes);
+}
+if ($fBatches) {
+    $conditions[] = '(' . implode(' OR ', array_fill(0, count($fBatches), 't.batch LIKE ?')) . ')';
+    foreach ($fBatches as $b) { $params[] = "%$b%"; }
+}
 if ($fTxn)      { $conditions[] = 't.transaction_id LIKE ?';     $params[] = "%$fTxn%"; }
 if ($fSource)   { $conditions[] = 't.source_location LIKE ?';    $params[] = "%$fSource%"; }
 if ($fDest)     { $conditions[] = 't.destination_location LIKE ?'; $params[] = "%$fDest%"; }

@@ -14,15 +14,21 @@ $offset = ($page - 1) * $limit;
 
 // ─── Filters ───────────────────────────────────────────────
 $fBatch     = sanitize($_GET['batch']         ?? '');
-$fDateFrom  = sanitize($_GET['date_from']     ?? ''); // format: 2024-01-15
-$fTimeFrom  = sanitize($_GET['time_from']     ?? ''); // format: 08:00
+$fDateFrom  = sanitize($_GET['date_from']     ?? '');
+$fTimeFrom  = sanitize($_GET['time_from']     ?? '');
 $fDateTo    = sanitize($_GET['date_to']       ?? '');
 $fTimeTo    = sanitize($_GET['time_to']       ?? '');
+
+// Nilai jamak dipisah koma, contoh: "B2024001,B2024002"
+$fBatches = $fBatch !== '' ? array_filter(array_map('trim', explode(',', $fBatch))) : [];
 
 $conditions = ['1=1'];
 $params     = [];
 
-if ($fBatch)  { $conditions[] = 's.batch LIKE ?'; $params[] = "%$fBatch%"; }
+if ($fBatches) {
+    $conditions[] = '(' . implode(' OR ', array_fill(0, count($fBatches), 's.batch LIKE ?')) . ')';
+    foreach ($fBatches as $b) { $params[] = "%$b%"; }
+}
 
 if ($fDateFrom) {
     $datetimeFrom = $fDateFrom . ' ' . ($fTimeFrom ?: '00:00') . ':00';

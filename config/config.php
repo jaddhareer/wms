@@ -46,7 +46,7 @@ define('TXN_PREFIX', [
 // Role → allowed modules
 define('ROLE_ACCESS', [
     'admin' => [
-        'dashboard','vendor_dashboard','inbound','outbound','softcase','moving',
+        'dashboard','inbound','outbound','softcase','moving',
         'stock','movements','softcase-monitoring','users','vendors'
     ],
     'supervisor' => [

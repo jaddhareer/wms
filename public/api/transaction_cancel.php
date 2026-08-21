@@ -91,27 +91,31 @@ try {
                 jsonResponse(['success' => false, 'error' => "Data lama tanpa bin/pallet, batch $batch tidak dapat dibatalkan otomatis"]);
             }
 
+            $srcPallet = ($r['source_location'] === 'WH External') ? EXT_STAGING_PALLET : $pallet;
+
             $binMeta = $pdo->prepare("
-                SELECT product_type, production_date
+                SELECT product_type, production_date, location_type
                 FROM bin_locations
-                WHERE batch = ? AND pallet_number = ?
-                LIMIT 1
+                WHERE batch = ? AND pallet_number = ? AND bin_location = ?
+                FOR UPDATE
             ");
-            $binMeta->execute([$batch, $pallet]);
-            $meta           = $binMeta->fetch();
+            $binMeta->execute([$batch, $srcPallet, $r['source_bin']]);
+            $meta = $binMeta->fetch();
+
             $productType    = $meta['product_type']    ?? null;
             $productionDate = $meta['production_date'] ?? null;
+            $locationType   = $meta['location_type']   ?? $r['source_location'];
 
             $upd = $pdo->prepare("
                 INSERT INTO bin_locations
-                    (batch, pallet_number, quantity, uom, product_type, production_date, quantity_kg, bin_location, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())
+                    (batch, pallet_number, quantity, uom, product_type, production_date, quantity_kg, bin_location, location_type, vendor_code, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
                 ON DUPLICATE KEY UPDATE
-                    quantity        = quantity + VALUES(quantity),
-                    quantity_kg     = ROUND(quantity_kg + VALUES(quantity_kg), 2),
-                    updated_at      = NOW()
+                    quantity    = quantity + VALUES(quantity),
+                    quantity_kg = ROUND(quantity_kg + VALUES(quantity_kg), 2),
+                    updated_at  = NOW()
             ");
-            $upd->execute([$batch, $pallet, $qty, $r['uom'], $productType, $productionDate, $qtyKg, $r['source_bin']]);
+            $upd->execute([$batch, $srcPallet, $qty, $r['uom'], $productType, $productionDate, $qtyKg, $r['source_bin'], $locationType, $r['vendor_code']]);
 
             $ins = $pdo->prepare("
                 INSERT INTO transactions

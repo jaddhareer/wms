@@ -10,16 +10,24 @@ $mode = sanitize($_GET['mode'] ?? 'grouped'); // grouped | detail | export
 $fBatch   = sanitize($_GET['batch']         ?? '');
 $fPallet  = sanitize($_GET['pallet_number'] ?? '');
 $fBin     = sanitize($_GET['bin_location']  ?? '');
-$fType    = sanitize($_GET['location_type'] ?? '');
+$fType    = sanitize($_GET['location_type']  ?? '');
+$fTypes   = $fType  !== '' ? array_filter(array_map('trim', explode(',', $fType)))  : [];
+$fBatches = $fBatch !== '' ? array_filter(array_map('trim', explode(',', $fBatch))) : [];
 
 // ─── Mode: detail per bin (untuk export & popup) ───────────
 if ($mode === 'detail' || $mode === 'export') {
     $conditions = ['quantity > 0'];
     $params     = [];
-    if ($fBatch)  { $conditions[] = 'batch LIKE ?';          $params[] = "%$fBatch%"; }
+    if ($fBatches) {
+    $conditions[] = '(' . implode(' OR ', array_fill(0, count($fBatches), 'batch LIKE ?')) . ')';
+    foreach ($fBatches as $b) { $params[] = "%$b%"; }
+    }
     if ($fPallet) { $conditions[] = 'pallet_number LIKE ?';  $params[] = "%$fPallet%"; }
     if ($fBin)    { $conditions[] = 'bin_location LIKE ?';   $params[] = "%$fBin%"; }
-    if ($fType)   { $conditions[] = 'location_type LIKE ?';  $params[] = "%$fType%"; }
+    if ($fTypes) {
+        $conditions[] = 'location_type IN (' . implode(',', array_fill(0, count($fTypes), '?')) . ')';
+        array_push($params, ...$fTypes);
+    }
     if ($vendor)  { $conditions[] = 'vendor_code = ?';       $params[] = $vendor; }
 
     $where = 'WHERE ' . implode(' AND ', $conditions);
@@ -40,8 +48,14 @@ $offset = ($page - 1) * $limit;
 
 $conditions = ['quantity > 0'];
 $params     = [];
-if ($fBatch)  { $conditions[] = 'batch LIKE ?';         $params[] = "%$fBatch%"; }
-if ($fType)   { $conditions[] = 'location_type LIKE ?'; $params[] = "%$fType%"; }
+if ($fBatches) {
+    $conditions[] = '(' . implode(' OR ', array_fill(0, count($fBatches), 'batch LIKE ?')) . ')';
+    foreach ($fBatches as $b) { $params[] = "%$b%"; }
+}
+if ($fTypes) {
+    $conditions[] = 'location_type IN (' . implode(',', array_fill(0, count($fTypes), '?')) . ')';
+    array_push($params, ...$fTypes);
+}
 if ($fBin)    { $conditions[] = 'bin_location LIKE ?';  $params[] = "%$fBin%"; }
 if ($fPallet) { $conditions[] = 'pallet_number LIKE ?'; $params[] = "%$fPallet%"; }
 if ($vendor)  { $conditions[] = 'vendor_code = ?';      $params[] = $vendor; }

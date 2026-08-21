@@ -1100,6 +1100,44 @@ async function scSubmit() {
   const pallet = q('#scPallet').value.trim();
   if (!batch || !pallet) { toast('Batch dan Pallet wajib diisi', 'warning'); return; }
 
+  // Cek apakah kombinasi batch + pallet ini sudah pernah di-softcase sebelumnya
+  const check = await api(`check_softcase.php?batch=${encodeURIComponent(batch)}&pallet=${encodeURIComponent(pallet)}`, 'GET');
+  if (check.success && check.exists) {
+    const d = check.data;
+    openModal('Batch Sudah Pernah Di-softcase', `
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <div>
+          Batch <strong>${escHtml(batch)}</strong> dengan nomor pallet <strong>${escHtml(d.pallet_number)}</strong>
+          sudah pernah di-softcase sebelumnya:
+        </div>
+        <div style="font-family:var(--font-mono);font-size:12px;background:var(--bg-alt,#f4f4f5);padding:8px 10px;border-radius:6px">
+          Qty Checked: ${fNum(d.qty_checked)} ${d.uom_checked||'CTN'}<br>
+          Qty Soft: ${fNum(d.qty_soft)} ${d.uom_soft||'CTN'}<br>
+          Terakhir dicek: ${fDateTime(d.checked_at)}
+        </div>
+        <div>Apakah Anda ingin melakukan pembaruan data?</div>
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px">
+          <button class="btn btn-secondary" onclick="closeModal()">Tidak</button>
+          <button class="btn btn-primary" onclick="scConfirmUpdate()">Ya, Perbarui</button>
+        </div>
+      </div>
+    `);
+    return;
+  }
+
+  await scDoSubmit();
+}
+
+window.scConfirmUpdate = () => {
+  closeModal();
+  scDoSubmit();
+};
+
+async function scDoSubmit() {
+  const batch = q('#scBatch').value.trim();
+  const pallet = q('#scPallet').value.trim();
+  if (!batch || !pallet) { toast('Batch dan Pallet wajib diisi', 'warning'); return; }
+
   const btn = q('#scSubmitBtn');
   btn.disabled = true; btn.innerHTML = svgSpinner() + ' Submitting...';
 
@@ -1275,10 +1313,19 @@ async function stock(page = 1) {
   if (page === 1) setContent(`
     <div class="panel">
       <div class="filters-bar">
-        <div class="filter-field"><label>Batch</label><input class="filter-input" id="fStBatch" placeholder="Filter..."></div>
+        <div class="filter-field"><label>Batch</label><input class="filter-input" id="fStBatch" placeholder="cth: B001,B002"></div>
         <div class="filter-field"><label>Pallet</label><input class="filter-input" id="fStPallet" placeholder="Filter..."></div>
         <div class="filter-field"><label>Bin Location</label><input class="filter-input" id="fStBin" placeholder="Filter..."></div>
-        <div class="filter-field"><label>Location Type</label><input class="filter-input" id="fStType" placeholder="Filter..."></div>
+        <div class="filter-field"><label>Location Type</label>
+          <div class="multi-select" id="fStTypeWrap">
+            <button type="button" class="filter-select multi-select-btn" id="fStTypeBtn" style="width:150px">Semua</button>
+            <div class="multi-select-panel hidden" id="fStTypePanel">
+              <label><input type="checkbox" value="LSN Ambient"> LSN Ambient</label>
+              <label><input type="checkbox" value="LSN Chiller"> LSN Chiller</label>
+              <label><input type="checkbox" value="WH External"> WH External</label>
+            </div>
+          </div>
+        </div>
         <div class="filters-actions" style="padding-bottom:0">
           <button class="btn btn-ghost btn-sm" id="stResetBtn">Reset</button>
           <button class="btn btn-green btn-sm" id="stExportBtn">${svgDownload()} Export</button>
@@ -1295,29 +1342,42 @@ async function stock(page = 1) {
     </div>
   `);
 
+  function stGetFilters() {
+    return {
+      batch:         q('#fStBatch')?.value  || '',
+      pallet_number: q('#fStPallet')?.value || '',
+      bin_location:  q('#fStBin')?.value    || '',
+      location_type: Array.from(qAll('#fStTypePanel input:checked')).map(el => el.value).join(','),
+    };
+  }
+
   let searchTimer;
-    ['fStBatch','fStPallet','fStBin','fStType'].forEach(id => {
+    ['fStBatch','fStPallet','fStBin'].forEach(id => {
       q(`#${id}`)?.addEventListener('input', () => {
         clearTimeout(searchTimer);
         searchTimer = setTimeout(() => {
-          stockFilters = {
-            batch:         q('#fStBatch')?.value  || '',
-            pallet_number: q('#fStPallet')?.value || '',
-            bin_location:  q('#fStBin')?.value    || '',
-            location_type: q('#fStType')?.value   || '',
-          };
+          stockFilters = stGetFilters();
           stockPage = 1;
           stockFetchData();
-        }, 400); // tunggu 400ms setelah user berhenti mengetik
+        }, 400);
       });
     });
 
-  q('#stResetBtn')?.addEventListener('click', () => {
-    stockFilters = {}; 
-    ['fStBatch','fStPallet','fStBin','fStType'].forEach(id => { const el=q(`#${id}`); if(el) el.value=''; });
+  initMultiSelect('fStTypeBtn', 'fStTypePanel', () => {
+    stockFilters = stGetFilters();
     stockPage = 1;
     stockFetchData();
   });
+
+  q('#stResetBtn')?.addEventListener('click', () => {
+    ['fStBatch','fStPallet','fStBin'].forEach(id => { const el=q(`#${id}`); if(el) el.value=''; });
+    qAll('#fStTypePanel input[type="checkbox"]').forEach(cb => cb.checked = false);
+    q('#fStTypeBtn').textContent = 'Semua';
+    stockFilters = {};
+    stockPage = 1;
+    stockFetchData();
+  });
+  
   q('#stExportBtn')?.addEventListener('click', () => {
     const p = new URLSearchParams({type:'stock', ...stockFilters});
     window.open(`api/export.php?${p}`, '_blank');
@@ -1388,7 +1448,7 @@ let movFilters = {}, movPage = 1;
 
 function movGetFilters() {
   return {
-    movement_type:  q('#fMvType')?.value  || '',
+    movement_type:  Array.from(qAll('#fMvTypePanel input:checked')).map(el => el.value).join(','),
     batch:          q('#fMvBatch')?.value || '',
     transaction_id: q('#fMvTxn')?.value   || '',
     source:         q('#fMvSrc')?.value   || '',
@@ -1404,16 +1464,18 @@ async function movements(page = 1) {
     setContent(`
       <div class="panel">
         <div class="filters-bar">
-          <div class="filter-field"><label>Type</label>
-            <select class="filter-select" id="fMvType" style="width:120px">
-              <option value="">Semua</option>
-              <option value="inbound">Inbound</option>
-              <option value="outbound">Outbound</option>
-              <option value="softcase">Softcase</option>
-              <option value="moving">Moving</option>
-            </select>
+            <div class="filter-field"><label>Type</label>
+            <div class="multi-select" id="fMvTypeWrap">
+              <button type="button" class="filter-select multi-select-btn" id="fMvTypeBtn" style="width:130px">Semua</button>
+              <div class="multi-select-panel hidden" id="fMvTypePanel">
+                <label><input type="checkbox" value="inbound"> <span class="badge badge-green">Inbound</span></label>
+                <label><input type="checkbox" value="outbound"> <span class="badge badge-red">Outbound</span></label>
+                <label><input type="checkbox" value="softcase"> <span class="badge badge-amber">Softcase</span></label>
+                <label><input type="checkbox" value="moving"> <span class="badge badge-blue">Moving</span></label>
+              </div>
+            </div>
           </div>
-          <div class="filter-field"><label>Batch</label><input class="filter-input" id="fMvBatch" placeholder="Filter..."></div>
+          <div class="filter-field"><label>Batch</label><input class="filter-input" id="fMvBatch" placeholder="cth: GV0001,GV0002"></div>
           <div class="filter-field"><label>TXN ID</label><input class="filter-input" id="fMvTxn" placeholder="Filter..."></div>
           <div class="filter-field"><label>Source</label><input class="filter-input" id="fMvSrc" placeholder="Filter..."></div>
           <div class="filter-field"><label>Destination</label><input class="filter-input" id="fMvDst" placeholder="Filter..."></div>
@@ -1436,9 +1498,18 @@ async function movements(page = 1) {
 
     // Reset
     q('#mvResetBtn')?.addEventListener('click', () => {
-      ['fMvType','fMvBatch','fMvTxn','fMvSrc','fMvDst','fMvDateFrom','fMvDateTo']
+      ['fMvBatch','fMvTxn','fMvSrc','fMvDst','fMvDateFrom','fMvDateTo']
         .forEach(id => { const el = q(`#${id}`); if (el) el.value = ''; });
+      qAll('#fMvTypePanel input[type="checkbox"]').forEach(cb => cb.checked = false);
+      q('#fMvTypeBtn').textContent = 'Semua';
       movFilters = {};
+      movPage    = 1;
+      movementsFetchData();
+    });
+
+    // Multi-select Type
+    initMultiSelect('fMvTypeBtn', 'fMvTypePanel', () => {
+      movFilters = movGetFilters();
       movPage    = 1;
       movementsFetchData();
     });
@@ -1462,11 +1533,6 @@ async function movements(page = 1) {
           movementsFetchData();
         }, 400);
       });
-    });
-    q('#fMvType')?.addEventListener('change', () => {
-      movFilters = movGetFilters();
-      movPage    = 1;
-      movementsFetchData();
     });
   }
 
@@ -1591,6 +1657,7 @@ async function softcaseMonitoring(page = 1) {
           <div class="filters-actions">
             <button class="btn btn-ghost btn-sm" id="scmResetBtn">Reset</button>
             <button class="btn btn-green btn-sm" id="scmExportBtn">${svgDownload()} Export</button>
+            <button class="btn btn-secondary btn-sm" id="scmExportPdfBtn">${svgDownload()} Export PDF</button>
           </div>
         </div>
         <div id="scmSummary" style="display:flex;gap:20px;padding:10px 16px;border-bottom:1px solid var(--border);font-size:12px;font-family:var(--font-mono);flex-wrap:wrap;"></div>
@@ -1615,6 +1682,11 @@ async function softcaseMonitoring(page = 1) {
     q('#scmExportBtn')?.addEventListener('click', () => {
       const p = new URLSearchParams({type:'softcase', ...scmGetFilters()});
       window.open(`api/export.php?${p}`, '_blank');
+    });
+
+    q('#scmExportPdfBtn')?.addEventListener('click', () => {
+      const p = new URLSearchParams(scmGetFilters());
+      window.open(`api/softcase_print.php?${p}`, '_blank');
     });
 
     let scmTimer;
@@ -1950,6 +2022,52 @@ window.closeModal = closeModal;
 
 q('#modalClose')?.addEventListener('click', closeModal);
 q('#modalOverlay')?.addEventListener('click', e => { if (e.target === q('#modalOverlay')) closeModal(); });
+
+// ─── Multi-select filter (generic, dipakai Movements/Stock/dst) — sekali daftar ───
+document.addEventListener('click', (e) => {
+  qAll('.multi-select-panel:not(.hidden)').forEach(panel => {
+    const wrap = panel.closest('.multi-select');
+    if (wrap && !wrap.contains(e.target)) panel.classList.add('hidden');
+  });
+});
+window.addEventListener('scroll', () => {
+  qAll('.multi-select-panel:not(.hidden)').forEach(panel => panel.classList.add('hidden'));
+}, true);
+
+/**
+ * Widget checkbox-dropdown untuk filter multi-value (dipakai di Movements, Stock, dst).
+ * btnId/panelId: id tombol & panel checkbox. onChange(checkedValues) dipanggil tiap centang berubah.
+ */
+function initMultiSelect(btnId, panelId, onChange) {
+  const btn   = q(`#${btnId}`);
+  const panel = q(`#${panelId}`);
+  if (!btn || !panel) return;
+
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const willOpen = panel.classList.contains('hidden');
+    if (willOpen) {
+      const r      = btn.getBoundingClientRect();
+      const panelW = panel.offsetWidth || 150;
+      const left   = Math.max(10, Math.min(r.left, window.innerWidth - panelW - 10));
+      panel.style.top  = `${r.bottom + 4}px`;
+      panel.style.left = `${left}px`;
+    }
+    panel.classList.toggle('hidden', !willOpen);
+  });
+
+  qAll(`#${panelId} input[type="checkbox"]`).forEach(cb => {
+    cb.addEventListener('change', () => {
+      const checked = Array.from(qAll(`#${panelId} input:checked`)).map(el => el.value);
+      btn.textContent = checked.length
+        ? (checked.length <= 2
+            ? checked.map(v => v[0].toUpperCase() + v.slice(1)).join(', ')
+            : `${checked.length} dipilih`)
+        : 'Semua';
+      onChange(checked);
+    });
+  });
+}
 
 // ─── SVG icons ───────────────────────────────────────────────
 const svgBox     = () => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>`;

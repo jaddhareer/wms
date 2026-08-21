@@ -534,6 +534,30 @@ td.truncate { max-width: 180px; white-space: nowrap; overflow: hidden; text-over
 .filter-select:focus { border-color: var(--accent); }
 .filters-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 
+/* ─── Multi-Select Filter (checkbox dropdown) ───────────────
+   Panel pakai position:fixed (bukan absolute) karena .filters-bar
+   punya overflow:hidden — kalau absolute, panel bakal ke-crop. */
+.multi-select { position: relative; }
+.multi-select-btn { cursor: pointer; }
+.multi-select-panel {
+  position: fixed;
+  min-width: 150px;
+  background: var(--surface);
+  border: 1px solid var(--border-2);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+  padding: 6px;
+  z-index: 300;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.multi-select-panel label {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 8px; border-radius: var(--radius);
+  font-size: 12px; cursor: pointer; white-space: nowrap;
+}
+.multi-select-panel label:hover { background: var(--surface-2); }
+.multi-select-panel input[type="checkbox"] { accent-color: var(--accent); cursor: pointer; }
+
 /* ─── Charts ─────────────────────────────────────────────── */
 .chart-container { position: relative; height: 180px; width: 100%; }
 
