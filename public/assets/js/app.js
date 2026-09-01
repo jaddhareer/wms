@@ -1323,6 +1323,7 @@ async function stock(page = 1) {
               <label><input type="checkbox" value="LSN Ambient"> LSN Ambient</label>
               <label><input type="checkbox" value="LSN Chiller"> LSN Chiller</label>
               <label><input type="checkbox" value="WH External"> WH External</label>
+              <label><input type="checkbox" value="Softcase Area"> Softcase</label>
             </div>
           </div>
         </div>
@@ -1377,7 +1378,7 @@ async function stock(page = 1) {
     stockPage = 1;
     stockFetchData();
   });
-  
+
   q('#stExportBtn')?.addEventListener('click', () => {
     const p = new URLSearchParams({type:'stock', ...stockFilters});
     window.open(`api/export.php?${p}`, '_blank');
@@ -1414,7 +1415,8 @@ async function stockFetchData() {
 }
 
 window.stockShowBins = async (batch) => {
-  const data = await api(`stock.php?mode=detail&batch=${encodeURIComponent(batch)}`);
+  const params = new URLSearchParams({ ...stockFilters, mode: 'detail', batch });
+  const data = await api(`stock.php?${params}`);
   if (!data.success) { toast(data.error, 'error'); return; }
   openModal(`Detail Bin — ${batch}`, `
     <div class="table-wrap" style="border:none">
@@ -1454,7 +1456,9 @@ function movGetFilters() {
     source:         q('#fMvSrc')?.value   || '',
     destination:    q('#fMvDst')?.value   || '',
     date_from:      q('#fMvDateFrom')?.value || '',
+    time_from:      q('#fMvTimeFrom')?.value || '',
     date_to:        q('#fMvDateTo')?.value   || '',
+    time_to:        q('#fMvTimeTo')?.value   || '',
   };
 }
 
@@ -1475,12 +1479,14 @@ async function movements(page = 1) {
               </div>
             </div>
           </div>
-          <div class="filter-field"><label>Batch</label><input class="filter-input" id="fMvBatch" placeholder="cth: GV0001,GV0002"></div>
+          <div class="filter-field"><label>Batch</label><input class="filter-input" id="fMvBatch" placeholder="GV0001,GV0002"></div>
           <div class="filter-field"><label>TXN ID</label><input class="filter-input" id="fMvTxn" placeholder="Filter..."></div>
           <div class="filter-field"><label>Source</label><input class="filter-input" id="fMvSrc" placeholder="Filter..."></div>
           <div class="filter-field"><label>Destination</label><input class="filter-input" id="fMvDst" placeholder="Filter..."></div>
           <div class="filter-field"><label>Dari</label><input class="filter-input" id="fMvDateFrom" type="date" style="width:140px"></div>
+          <div class="filter-field"><label>Jam</label><input class="filter-input" id="fMvTimeFrom" type="time" style="width:100px"></div>
           <div class="filter-field"><label>Sampai</label><input class="filter-input" id="fMvDateTo" type="date" style="width:140px"></div>
+          <div class="filter-field"><label>Jam</label><input class="filter-input" id="fMvTimeTo" type="time" style="width:100px"></div>
           <div class="filters-actions">
             <button class="btn btn-ghost btn-sm" id="mvResetBtn">Reset</button>
             <button class="btn btn-green btn-sm" id="mvExportBtn">${svgDownload()} Export</button>
@@ -1498,7 +1504,7 @@ async function movements(page = 1) {
 
     // Reset
     q('#mvResetBtn')?.addEventListener('click', () => {
-      ['fMvBatch','fMvTxn','fMvSrc','fMvDst','fMvDateFrom','fMvDateTo']
+      ['fMvBatch','fMvTxn','fMvSrc','fMvDst','fMvDateFrom','fMvTimeFrom','fMvDateTo','fMvTimeTo']
         .forEach(id => { const el = q(`#${id}`); if (el) el.value = ''; });
       qAll('#fMvTypePanel input[type="checkbox"]').forEach(cb => cb.checked = false);
       q('#fMvTypeBtn').textContent = 'Semua';
@@ -1524,7 +1530,7 @@ async function movements(page = 1) {
 
     // Live search
     let movTimer;
-    ['fMvBatch','fMvTxn','fMvSrc','fMvDst','fMvDateFrom','fMvDateTo'].forEach(id => {
+    ['fMvBatch','fMvTxn','fMvSrc','fMvDst','fMvDateFrom','fMvTimeFrom','fMvDateTo','fMvTimeTo'].forEach(id => {
       q(`#${id}`)?.addEventListener('input', () => {
         clearTimeout(movTimer);
         movTimer = setTimeout(() => {

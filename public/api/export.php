@@ -120,8 +120,14 @@ function exportMovements(PDO $pdo): void {
     if (!empty($_GET['transaction_id'])){ $conditions[] = 't.transaction_id LIKE ?';      $params[] = '%'.$_GET['transaction_id'].'%'; }
     if (!empty($_GET['source']))        { $conditions[] = 't.source_location LIKE ?';     $params[] = '%'.$_GET['source'].'%'; }
     if (!empty($_GET['destination']))   { $conditions[] = 't.destination_location LIKE ?';$params[] = '%'.$_GET['destination'].'%'; }
-    if (!empty($_GET['date_from']))     { $conditions[] = 'DATE(t.created_at) >= ?';      $params[] = $_GET['date_from']; }
-    if (!empty($_GET['date_to']))       { $conditions[] = 'DATE(t.created_at) <= ?';      $params[] = $_GET['date_to']; }
+    if (!empty($_GET['date_from'])) {
+        $conditions[] = 't.created_at >= ?';
+        $params[]     = $_GET['date_from'] . ' ' . ($_GET['time_from'] ?: '00:00') . ':00';
+    }
+    if (!empty($_GET['date_to'])) {
+        $conditions[] = 't.created_at <= ?';
+        $params[]     = $_GET['date_to'] . ' ' . ($_GET['time_to'] ?: '23:59') . ':59';
+    }
     if ($vendor)                        { $conditions[] = 't.vendor_code = ?';            $params[] = $vendor; }
 
     $where = 'WHERE ' . implode(' AND ', $conditions);

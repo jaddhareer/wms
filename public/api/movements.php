@@ -20,7 +20,9 @@ $fTxn      = sanitize($_GET['transaction_id']?? '');
 $fSource   = sanitize($_GET['source']        ?? '');
 $fDest     = sanitize($_GET['destination']   ?? '');
 $fDateFrom = sanitize($_GET['date_from']     ?? '');
+$fTimeFrom = sanitize($_GET['time_from']     ?? '');
 $fDateTo   = sanitize($_GET['date_to']       ?? '');
+$fTimeTo   = sanitize($_GET['time_to']       ?? '');
 
 // Nilai jamak dipisah koma, contoh: "inbound,outbound"
 $fTypes   = $fType  !== '' ? array_filter(array_map('trim', explode(',', $fType)))  : [];
@@ -40,8 +42,8 @@ if ($fBatches) {
 if ($fTxn)      { $conditions[] = 't.transaction_id LIKE ?';     $params[] = "%$fTxn%"; }
 if ($fSource)   { $conditions[] = 't.source_location LIKE ?';    $params[] = "%$fSource%"; }
 if ($fDest)     { $conditions[] = 't.destination_location LIKE ?'; $params[] = "%$fDest%"; }
-if ($fDateFrom) { $conditions[] = 'DATE(t.created_at) >= ?';     $params[] = $fDateFrom; }
-if ($fDateTo)   { $conditions[] = 'DATE(t.created_at) <= ?';     $params[] = $fDateTo; }
+if ($fDateFrom) { $conditions[] = 't.created_at >= ?'; $params[] = $fDateFrom . ' ' . ($fTimeFrom ?: '00:00') . ':00'; }
+if ($fDateTo)   { $conditions[] = 't.created_at <= ?'; $params[] = $fDateTo   . ' ' . ($fTimeTo   ?: '23:59') . ':59'; }
 if ($vendor)    { $conditions[] = 't.vendor_code = ?';           $params[] = $vendor; }
 
 $where = 'WHERE ' . implode(' AND ', $conditions);
@@ -92,5 +94,5 @@ jsonResponse([
         'totalPages' => $totalPages,
     ],
     'hasFilters' => $hasFilters,
-    'filters'    => compact('fType','fBatch','fTxn','fSource','fDest','fDateFrom','fDateTo'),
+    'filters'    => compact('fType','fBatch','fTxn','fSource','fDest','fDateFrom','fTimeFrom','fDateTo','fTimeTo'),
 ]);

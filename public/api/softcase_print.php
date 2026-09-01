@@ -14,13 +14,16 @@ $fTimeFrom  = sanitize($_GET['time_from']     ?? '');
 $fDateTo    = sanitize($_GET['date_to']       ?? '');
 $fTimeTo    = sanitize($_GET['time_to']       ?? '');
 
+// Nilai jamak dipisah koma, contoh: "B2024001,B2024002"
+$fBatches = $fBatch !== '' ? array_filter(array_map('trim', explode(',', $fBatch))) : [];
+
 $conditions = ['1=1'];
 $params     = [];
 
-if ($fBatch)  { $conditions[] = 's.batch LIKE ?';         $params[] = "%$fBatch%"; }
-if ($fPallet) { $conditions[] = 's.pallet_number LIKE ?'; $params[] = "%$fPallet%"; }
-if ($fStatus === 'checked')   $conditions[] = 's.qty_checked > 0';
-if ($fStatus === 'unchecked') $conditions[] = 's.qty_checked = 0';
+if ($fBatches) {
+    $conditions[] = '(' . implode(' OR ', array_fill(0, count($fBatches), 's.batch LIKE ?')) . ')';
+    foreach ($fBatches as $b) { $params[] = "%$b%"; }
+}
 
 if ($fDateFrom) {
     $conditions[] = 's.checked_at >= ?';
