@@ -6,6 +6,7 @@ requireAuth();
 $pdo = getDB();
 
 $txn_id = sanitize($_GET['transaction_id'] ?? '');
+$batch  = sanitize($_GET['batch'] ?? '');
 if (!$txn_id) jsonResponse(['success' => false, 'error' => 'transaction_id wajib diisi'], 400);
 
 $stmt = $pdo->prepare("
@@ -16,40 +17,36 @@ $stmt = $pdo->prepare("
     ORDER BY t.id ASC
 ");
 $stmt->execute([$txn_id]);
-$allRows = $stmt->fetchAll();
+$rows = $stmt->fetchAll();
 
-if (!$allRows) jsonResponse(['success' => false, 'error' => 'Transaksi tidak ditemukan'], 404);
+if (!$rows) jsonResponse(['success' => false, 'error' => 'Transaksi tidak ditemukan'], 404);
 
-$header = $allRows[0];
+// Satu transaction_id bisa berisi beberapa batch sekaligus. Kalau batch dikirim,
+// status cancel/can_cancel dihitung khusus untuk baris-baris batch itu saja
+// (bukan seluruh transaksi), supaya bisa cancel per batch.
+$scopeRows = $batch !== '' ? array_values(array_filter($rows, fn($r) => $r['batch'] === $batch)) : $rows;
+if ($batch !== '' && !$scopeRows) {
+    jsonResponse(['success' => false, 'error' => "Batch $batch tidak ditemukan pada transaksi ini"], 404);
+}
+
+$header = $scopeRows[0];
 $me     = currentUser();
 
+$isCancelled = true;
+foreach ($scopeRows as $r) { if (!$r['is_cancelled']) { $isCancelled = false; break; } }
+
 $canCancel = in_array($header['movement_type'], ['inbound','outbound','moving'])
-    && !$header['is_cancelled']
+    && !$isCancelled
     && in_array($me['role'], ['admin','supervisor']);
 
-// Status boleh-dibatalkan dihitung dari SEMUA baris transaksi ini,
-// bukan cuma yang nanti tampil setelah difilter di bawah.
-foreach ($allRows as $r) {
+// Data lama tanpa bin_location/pallet_number tidak bisa dibatalkan otomatis
+foreach ($scopeRows as $r) {
     $hasBin = !empty($r['source_bin']) || !empty($r['destination_bin']) || !empty($r['bin_location']);
     if (in_array($r['movement_type'], ['inbound','outbound']) && (!$hasBin || empty($r['pallet_number']))) {
         $canCancel = false;
         break;
     }
 }
-
-// Filter TAMPILAN saja (dibawa dari filter aktif di halaman Movements)
-$fBatch  = sanitize($_GET['batch']       ?? '');
-$fSource = sanitize($_GET['source']      ?? '');
-$fDest   = sanitize($_GET['destination'] ?? '');
-
-$rows = array_values(array_filter($allRows, function ($r) use ($fBatch, $fSource, $fDest) {
-    if ($fBatch  && stripos($r['batch'] ?? '', $fBatch) === false)              return false;
-    if ($fSource && stripos($r['source_location'] ?? '', $fSource) === false)   return false;
-    if ($fDest   && stripos($r['destination_location'] ?? '', $fDest) === false) return false;
-    return true;
-}));
-
-if (!$rows) $rows = $allRows; // kalau filter tidak cocok satu pun baris, tampilkan semua drpd kosong
 
 jsonResponse([
     'success'    => true,
@@ -59,7 +56,8 @@ jsonResponse([
         'username'       => $header['username'],
         'userid'         => $header['userid'],
         'created_at'     => $header['created_at'],
-        'is_cancelled'   => (bool)$header['is_cancelled'],
+        'is_cancelled'   => $isCancelled,
+        'batch'          => $batch ?: null,
     ],
     'rows'       => $rows,
     'can_cancel' => $canCancel,

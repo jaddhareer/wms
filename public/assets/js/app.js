@@ -1553,7 +1553,7 @@ async function movementsFetchData() {
   const offset = (movPage - 1) * 50;
   q('#mvBody').innerHTML = data.data.length
     ? data.data.map((r, i) => `
-        <tr style="cursor:pointer" onclick="showTxnDetail('${r.transaction_id}')" title="Klik untuk detail">
+        <tr style="cursor:pointer" onclick="showTxnDetail('${r.transaction_id}','${r.batch||''}')" title="Klik untuk detail">
           <td class="mono" style="font-size:11px">${r.transaction_id}</td>
           <td><span class="badge ${BADGE_MAP[r.movement_type]||'badge-gray'}">${r.movement_type}</span></td>
           <td>${r.batch||'-'}</td>
@@ -1570,18 +1570,20 @@ async function movementsFetchData() {
   q('#mvPagination').innerHTML = renderPagination(data.pagination, 'movements');
 }
 
-window.showTxnDetail = async (txnId) => {
-  const params = new URLSearchParams({ ...movFilters, transaction_id: txnId });
+window.showTxnDetail = async (txnId, batch = '') => {
+  const params = new URLSearchParams({ transaction_id: txnId });
+  if (batch) params.set('batch', batch);
   const data = await api(`transaction_detail.php?${params}`);
   if (!data.success) { toast(data.error, 'error'); return; }
 
   const h = data.header, rows = data.rows;
-  const totalKg  = rows.reduce((s,r) => s + Number(r.quantity_kg||0), 0);
+  const totalKg    = rows.reduce((s,r) => s + Number(r.quantity_kg||0), 0);
+  const cancelLabel = batch ? `Batalkan Batch: ${batch}` : 'Batalkan Transaksi';
 
   openModal(`Detail Transaksi — ${txnId}`, `
     <div style="margin-bottom:14px;font-size:13px;line-height:1.7">
       <div><strong>Tipe:</strong> <span class="badge ${BADGE_MAP[h.movement_type]||'badge-gray'}">${h.movement_type}</span>
-        ${h.is_cancelled ? '<span class="badge badge-red" style="margin-left:6px">DIBATALKAN</span>' : ''}</div>
+        ${h.is_cancelled ? `<span class="badge badge-red" style="margin-left:6px">DIBATALKAN${batch ? ` (${batch})` : ''}</span>` : ''}</div>
       <div><strong>Oleh:</strong> ${h.username} (${h.userid})</div>
       <div><strong>Waktu:</strong> ${fDateTime(h.created_at)}</div>
     </div>
@@ -1591,7 +1593,7 @@ window.showTxnDetail = async (txnId) => {
         <tbody>
           ${rows.map(r => `
             <tr>
-              <td>${r.batch||'-'}</td>
+              <td>${r.batch||'-'} ${r.is_cancelled ? '<span class="badge badge-red" style="font-size:9px;margin-left:4px">DIBATALKAN</span>' : ''}</td>
               <td class="mono">${r.pallet_number||'-'}</td>
               <td class="mono">${fNum(r.quantity)} ${r.uom||''}</td>
               <td class="mono">${fNum(r.quantity_kg)} kg</td>
@@ -1612,16 +1614,19 @@ window.showTxnDetail = async (txnId) => {
         ${svgDownload()} Export PDF
       </button>
       ${data.can_cancel
-        ? `<button class="btn btn-danger" onclick="cancelTransaction('${txnId}')">Batalkan Transaksi</button>`
+        ? `<button class="btn btn-danger" onclick="cancelTransaction('${txnId}','${batch}')">${cancelLabel}</button>`
         : (h.is_cancelled ? '<span class="badge badge-gray">Sudah dibatalkan</span>' : '')}
       <button class="btn btn-secondary" onclick="closeModal()">Tutup</button>
     </div>
   `);
 };
 
-window.cancelTransaction = async (txnId) => {
-  if (!confirm(`Yakin membatalkan transaksi ${txnId}? Stok akan disesuaikan otomatis dan tidak dapat diulang.`)) return;
-  const res = await api('transaction_cancel.php', 'POST', { transaction_id: txnId });
+window.cancelTransaction = async (txnId, batch = '') => {
+  const label = batch ? `batch ${batch} pada transaksi ${txnId}` : `transaksi ${txnId}`;
+  if (!confirm(`Yakin membatalkan ${label}? Stok akan disesuaikan otomatis dan tidak dapat diulang.`)) return;
+  const body = { transaction_id: txnId };
+  if (batch) body.batch = batch;
+  const res = await api('transaction_cancel.php', 'POST', body);
   if (res.success) {
     toast(res.message, 'success');
     closeModal();

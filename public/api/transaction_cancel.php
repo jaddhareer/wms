@@ -15,6 +15,7 @@ if (!in_array($me['role'], ['admin','supervisor'])) {
 }
 
 $txn_id = sanitize(getInput('transaction_id', ''));
+$batch  = sanitize(getInput('batch', ''));
 if (!$txn_id) jsonResponse(['success' => false, 'error' => 'transaction_id wajib diisi']);
 
 $pdo = getDB();
@@ -22,17 +23,22 @@ $pdo = getDB();
 try {
     $pdo->beginTransaction();
 
-    $stmt = $pdo->prepare("SELECT * FROM transactions WHERE transaction_id = ? FOR UPDATE");
-    $stmt->execute([$txn_id]);
+    if ($batch !== '') {
+        $stmt = $pdo->prepare("SELECT * FROM transactions WHERE transaction_id = ? AND batch = ? FOR UPDATE");
+        $stmt->execute([$txn_id, $batch]);
+    } else {
+        $stmt = $pdo->prepare("SELECT * FROM transactions WHERE transaction_id = ? FOR UPDATE");
+        $stmt->execute([$txn_id]);
+    }
     $rows = $stmt->fetchAll();
 
     if (!$rows) {
         $pdo->rollBack();
-        jsonResponse(['success' => false, 'error' => 'Transaksi tidak ditemukan']);
+        jsonResponse(['success' => false, 'error' => $batch !== '' ? "Batch $batch tidak ditemukan pada transaksi ini" : 'Transaksi tidak ditemukan']);
     }
     if ($rows[0]['is_cancelled']) {
         $pdo->rollBack();
-        jsonResponse(['success' => false, 'error' => 'Transaksi sudah pernah dibatalkan']);
+        jsonResponse(['success' => false, 'error' => $batch !== '' ? "Batch $batch sudah pernah dibatalkan" : 'Transaksi sudah pernah dibatalkan']);
     }
 
     $originalType = $rows[0]['movement_type'];
@@ -190,10 +196,16 @@ try {
         }
     }
 
-    $pdo->prepare("UPDATE transactions SET is_cancelled = 1 WHERE transaction_id = ?")->execute([$txn_id]);
+    if ($batch !== '') {
+        $pdo->prepare("UPDATE transactions SET is_cancelled = 1 WHERE transaction_id = ? AND batch = ?")->execute([$txn_id, $batch]);
+        $successMsg = "Batch $batch pada transaksi $txn_id berhasil dibatalkan | TXN Pembatalan: $newTxnId";
+    } else {
+        $pdo->prepare("UPDATE transactions SET is_cancelled = 1 WHERE transaction_id = ?")->execute([$txn_id]);
+        $successMsg = "Transaksi $txn_id berhasil dibatalkan | TXN Pembatalan: $newTxnId";
+    }
 
     $pdo->commit();
-    jsonResponse(['success' => true, 'message' => "Transaksi $txn_id berhasil dibatalkan | TXN Pembatalan: $newTxnId"]);
+    jsonResponse(['success' => true, 'message' => $successMsg]);
 
 } catch (PDOException $e) {
     if ($pdo->inTransaction()) $pdo->rollBack();
