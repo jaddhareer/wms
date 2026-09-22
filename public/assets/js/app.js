@@ -1571,7 +1571,8 @@ async function movementsFetchData() {
 }
 
 window.showTxnDetail = async (txnId) => {
-  const data = await api(`transaction_detail.php?transaction_id=${encodeURIComponent(txnId)}`);
+  const params = new URLSearchParams({ ...movFilters, transaction_id: txnId });
+  const data = await api(`transaction_detail.php?${params}`);
   if (!data.success) { toast(data.error, 'error'); return; }
 
   const h = data.header, rows = data.rows;
