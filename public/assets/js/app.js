@@ -1553,7 +1553,7 @@ async function movementsFetchData() {
   const offset = (movPage - 1) * 50;
   q('#mvBody').innerHTML = data.data.length
     ? data.data.map((r, i) => `
-        <tr style="cursor:pointer" onclick="showTxnDetail('${r.transaction_id}','${r.batch||''}')" title="Klik untuk detail">
+        <tr style="cursor:pointer" onclick="showTxnDetail('${r.transaction_id}')" title="Klik untuk detail">
           <td class="mono" style="font-size:11px">${r.transaction_id}</td>
           <td><span class="badge ${BADGE_MAP[r.movement_type]||'badge-gray'}">${r.movement_type}</span></td>
           <td>${r.batch||'-'}</td>
@@ -1570,29 +1570,28 @@ async function movementsFetchData() {
   q('#mvPagination').innerHTML = renderPagination(data.pagination, 'movements');
 }
 
-window.showTxnDetail = async (txnId, batch = '') => {
-  const params = new URLSearchParams({ transaction_id: txnId });
-  if (batch) params.set('batch', batch);
-  const data = await api(`transaction_detail.php?${params}`);
+window.showTxnDetail = async (txnId) => {
+  const data = await api(`transaction_detail.php?transaction_id=${encodeURIComponent(txnId)}`);
   if (!data.success) { toast(data.error, 'error'); return; }
 
   const h = data.header, rows = data.rows;
-  const totalKg    = rows.reduce((s,r) => s + Number(r.quantity_kg||0), 0);
-  const cancelLabel = batch ? `Batalkan Batch: ${batch}` : 'Batalkan Transaksi';
+  const totalKg      = rows.reduce((s,r) => s + Number(r.quantity_kg||0), 0);
+  const allCancelled = rows.length > 0 && rows.every(r => r.is_cancelled);
 
   openModal(`Detail Transaksi — ${txnId}`, `
     <div style="margin-bottom:14px;font-size:13px;line-height:1.7">
       <div><strong>Tipe:</strong> <span class="badge ${BADGE_MAP[h.movement_type]||'badge-gray'}">${h.movement_type}</span>
-        ${h.is_cancelled ? `<span class="badge badge-red" style="margin-left:6px">DIBATALKAN${batch ? ` (${batch})` : ''}</span>` : ''}</div>
+        ${allCancelled ? '<span class="badge badge-red" style="margin-left:6px">DIBATALKAN</span>' : ''}</div>
       <div><strong>Oleh:</strong> ${h.username} (${h.userid})</div>
       <div><strong>Waktu:</strong> ${fDateTime(h.created_at)}</div>
     </div>
     <div class="table-wrap" style="border:none">
       <table>
-        <thead><tr><th>Batch</th><th>Pallet</th><th>Qty</th><th>Kg</th><th>Dari</th><th>Bin Asal</th><th>Ke</th><th>Bin Tujuan</th><th>Remarks</th></tr></thead>
+        <thead><tr><th></th><th>Batch</th><th>Pallet</th><th>Qty</th><th>Kg</th><th>Dari</th><th>Bin Asal</th><th>Ke</th><th>Bin Tujuan</th><th>Remarks</th></tr></thead>
         <tbody>
           ${rows.map(r => `
             <tr>
+              <td><input type="checkbox" class="txn-row-check" value="${r.id}" ${r.can_cancel ? '' : 'disabled'}></td>
               <td>${r.batch||'-'} ${r.is_cancelled ? '<span class="badge badge-red" style="font-size:9px;margin-left:4px">DIBATALKAN</span>' : ''}</td>
               <td class="mono">${r.pallet_number||'-'}</td>
               <td class="mono">${fNum(r.quantity)} ${r.uom||''}</td>
@@ -1613,20 +1612,25 @@ window.showTxnDetail = async (txnId, batch = '') => {
       <button class="btn btn-secondary" onclick="window.open('api/transaction_print.php?transaction_id=${encodeURIComponent(txnId)}','_blank')">
         ${svgDownload()} Export PDF
       </button>
-      ${data.can_cancel
-        ? `<button class="btn btn-danger" onclick="cancelTransaction('${txnId}','${batch}')">${cancelLabel}</button>`
-        : (h.is_cancelled ? '<span class="badge badge-gray">Sudah dibatalkan</span>' : '')}
+      <button class="btn btn-danger" id="txnCancelSelectedBtn" disabled onclick="cancelTransaction('${txnId}')">Batalkan yang Dipilih</button>
       <button class="btn btn-secondary" onclick="closeModal()">Tutup</button>
     </div>
   `);
+
+  const updateCancelBtn = () => {
+    const checked = qAll('.txn-row-check:checked');
+    const btn = q('#txnCancelSelectedBtn');
+    btn.disabled = checked.length === 0;
+    btn.textContent = checked.length ? `Batalkan yang Dipilih (${checked.length})` : 'Batalkan yang Dipilih';
+  };
+  qAll('.txn-row-check').forEach(cb => cb.addEventListener('change', updateCancelBtn));
 };
 
-window.cancelTransaction = async (txnId, batch = '') => {
-  const label = batch ? `batch ${batch} pada transaksi ${txnId}` : `transaksi ${txnId}`;
-  if (!confirm(`Yakin membatalkan ${label}? Stok akan disesuaikan otomatis dan tidak dapat diulang.`)) return;
-  const body = { transaction_id: txnId };
-  if (batch) body.batch = batch;
-  const res = await api('transaction_cancel.php', 'POST', body);
+window.cancelTransaction = async (txnId) => {
+  const ids = Array.from(qAll('.txn-row-check:checked')).map(cb => Number(cb.value));
+  if (!ids.length) return;
+  if (!confirm(`Yakin membatalkan ${ids.length} baris pada transaksi ${txnId}? Stok akan disesuaikan otomatis dan tidak dapat diulang.`)) return;
+  const res = await api('transaction_cancel.php', 'POST', { transaction_id: txnId, ids });
   if (res.success) {
     toast(res.message, 'success');
     closeModal();

@@ -15,30 +15,28 @@ if (!in_array($me['role'], ['admin','supervisor'])) {
 }
 
 $txn_id = sanitize(getInput('transaction_id', ''));
-$batch  = sanitize(getInput('batch', ''));
+$ids    = getInput('ids', []);
 if (!$txn_id) jsonResponse(['success' => false, 'error' => 'transaction_id wajib diisi']);
+if (!is_array($ids) || !$ids) jsonResponse(['success' => false, 'error' => 'Pilih minimal 1 baris yang ingin dibatalkan']);
+$ids = array_values(array_unique(array_map('intval', $ids)));
 
 $pdo = getDB();
 
 try {
     $pdo->beginTransaction();
 
-    if ($batch !== '') {
-        $stmt = $pdo->prepare("SELECT * FROM transactions WHERE transaction_id = ? AND batch = ? FOR UPDATE");
-        $stmt->execute([$txn_id, $batch]);
-    } else {
-        $stmt = $pdo->prepare("SELECT * FROM transactions WHERE transaction_id = ? FOR UPDATE");
-        $stmt->execute([$txn_id]);
-    }
+    $ph   = implode(',', array_fill(0, count($ids), '?'));
+    $stmt = $pdo->prepare("SELECT * FROM transactions WHERE transaction_id = ? AND id IN ($ph) FOR UPDATE");
+    $stmt->execute(array_merge([$txn_id], $ids));
     $rows = $stmt->fetchAll();
 
     if (!$rows) {
         $pdo->rollBack();
-        jsonResponse(['success' => false, 'error' => $batch !== '' ? "Batch $batch tidak ditemukan pada transaksi ini" : 'Transaksi tidak ditemukan']);
+        jsonResponse(['success' => false, 'error' => 'Baris yang dipilih tidak ditemukan pada transaksi ini']);
     }
-    if ($rows[0]['is_cancelled']) {
+    if (array_filter($rows, fn($r) => $r['is_cancelled'])) {
         $pdo->rollBack();
-        jsonResponse(['success' => false, 'error' => $batch !== '' ? "Batch $batch sudah pernah dibatalkan" : 'Transaksi sudah pernah dibatalkan']);
+        jsonResponse(['success' => false, 'error' => 'Salah satu baris yang dipilih sudah pernah dibatalkan']);
     }
 
     $originalType = $rows[0]['movement_type'];
@@ -196,16 +194,10 @@ try {
         }
     }
 
-    if ($batch !== '') {
-        $pdo->prepare("UPDATE transactions SET is_cancelled = 1 WHERE transaction_id = ? AND batch = ?")->execute([$txn_id, $batch]);
-        $successMsg = "Batch $batch pada transaksi $txn_id berhasil dibatalkan | TXN Pembatalan: $newTxnId";
-    } else {
-        $pdo->prepare("UPDATE transactions SET is_cancelled = 1 WHERE transaction_id = ?")->execute([$txn_id]);
-        $successMsg = "Transaksi $txn_id berhasil dibatalkan | TXN Pembatalan: $newTxnId";
-    }
+    $pdo->prepare("UPDATE transactions SET is_cancelled = 1 WHERE transaction_id = ? AND id IN ($ph)")->execute(array_merge([$txn_id], $ids));
 
     $pdo->commit();
-    jsonResponse(['success' => true, 'message' => $successMsg]);
+    jsonResponse(['success' => true, 'message' => count($rows) . " baris pada transaksi $txn_id berhasil dibatalkan | TXN Pembatalan: $newTxnId"]);
 
 } catch (PDOException $e) {
     if ($pdo->inTransaction()) $pdo->rollBack();

@@ -57,7 +57,7 @@ define('ROLE_ACCESS', [
         'dashboard','inbound','outbound','moving','stock','movements','softcase-monitoring'
     ],
     'softchecker' => [
-        'dashboard','softcase','softcase-monitoring'
+        'dashboard','softcase','softcase-monitoring','movements'
     ],
     'vendor' => [
         'vendor-dashboard','moving','outbound','stock','movements'

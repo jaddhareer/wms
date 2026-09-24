@@ -6,6 +6,10 @@ require_once dirname(dirname(__DIR__)) . '/functions/bootstrap.php';
 
 requireModule('movements');
 $vendor = requireVendorScope();
+$user = currentUser();
+$nonWarehouse = $user['role'] == 'softchecker';
+
+// $packaging = requirePackagingScope();
 
 $pdo = getDB();
 
@@ -30,7 +34,10 @@ $fBatches = $fBatch !== '' ? array_filter(array_map('trim', explode(',', $fBatch
 
 $conditions = ['1=1'];
 $params     = [];
-
+if ($nonWarehouse) {
+    $conditions[] = "t.movement_type IN (?,?)";
+    array_push($params, 'inbound', 'softcase');
+}
 if ($fTypes) {
     $conditions[] = 't.movement_type IN (' . implode(',', array_fill(0, count($fTypes), '?')) . ')';
     array_push($params, ...$fTypes);
