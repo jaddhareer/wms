@@ -88,6 +88,16 @@ function currentUser(): array {
 function canAccess(string $module): bool {
     $role    = $_SESSION['role'] ?? '';
     $allowed = ROLE_ACCESS[$role] ?? [];
+
+    // Blokir modul tertentu untuk user tertentu
+    $userBlock = [
+        'packaging' => ['moving'],
+    ];
+    $userid = $_SESSION['userid'] ?? '';
+    if (in_array($module, $userBlock[$userid] ?? [], true)) {
+        return false;
+    }
+
     return in_array($module, $allowed, true);
 }
 

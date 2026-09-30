@@ -2033,7 +2033,11 @@ function openModal(title, bodyHtml) {
   autoSelect();
   initBatchBinPopups();
 }
-function closeModal() { q('#modalOverlay').classList.add('hidden'); q('#modalBody').innerHTML = ''; }
+function closeModal() {
+  stopQrScanner();
+  q('#modalOverlay').classList.add('hidden');
+  q('#modalBody').innerHTML = '';
+}
 window.closeModal = closeModal;
 
 q('#modalClose')?.addEventListener('click', closeModal);
@@ -2117,6 +2121,7 @@ function initBatchBinPopups() {
       el.dataset.popupBound = 'true';
     }
   });
+  initBatchScanners();
 }
 
 function openBatchPopup(targetEl) {
@@ -2155,6 +2160,132 @@ function openBatchPopup(targetEl) {
     closeModal();
     targetEl.dispatchEvent(new Event('input')); // Trigger input event jika ada listener lain
   };
+}
+
+/* ═══════════════════════════════════════════════════════════
+   SCAN QR BATCH (KAMERA HP)
+   ═══════════════════════════════════════════════════════════ */
+
+const svgCamera = () => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>`;
+
+function initBatchScanners() {
+  const scanInputs = ['#ibBatch','#obBatch','#scBatch','#mvBatch','#ibBin','#mvSrc','#mvDst'];
+
+  scanInputs.forEach(sel => {
+    const el = q(sel);
+    if (!el || el.dataset.scanBound) return;
+
+    // Bungkus input dengan .input-wrap lalu tambahkan tombol kamera di kanan
+    const wrap = document.createElement('div');
+    wrap.className = 'input-wrap';
+    el.parentNode.insertBefore(wrap, el);
+    wrap.appendChild(el);
+
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'input-icon-btn';
+    btn.title = 'Scan QR';
+    btn.innerHTML = svgCamera();
+    btn.addEventListener('click', () => openScanPopup(el));
+    wrap.appendChild(btn);
+
+    el.dataset.scanBound = 'true';
+  });
+}
+
+function openScanPopup(targetEl) {
+  if (!window.isSecureContext) {
+    toast('Kamera hanya bisa dipakai lewat HTTPS atau localhost', 'error');
+    return;
+  }
+  if (typeof Html5Qrcode === 'undefined') {
+    toast('Library scanner gagal dimuat, cek koneksi internet', 'error');
+    return;
+  }
+
+  openModal('Scan QR Batch', `
+    <div class="field-group">
+      <label class="field-label">Kamera</label>
+      <select id="qrCamSelect" class="field-select" disabled><option>Memuat kamera...</option></select>
+    </div>
+    <div id="qrReader" style="width:100%"></div>
+    <p class="field-label" style="text-align:center;margin-top:10px">Arahkan kamera ke QR code batch</p>
+  `);
+
+  const scanner = new Html5Qrcode('qrReader');
+  window._qrScanner = scanner;
+  let done = false;
+
+  const onScan = (text) => {
+    if (done) return;
+    done = true;
+    // Ambil pola batch (mis. DE25GV0123) kalau QR berisi teks lain; kalau tidak ketemu pakai teks apa adanya
+    const raw = text.trim().toUpperCase();
+    const m = raw.match(/DE\d{2}[A-Z]{2}\d{4}/);
+    targetEl.value = m ? m[0] : raw;
+    navigator.vibrate?.(100);
+    closeModal();
+    targetEl.dispatchEvent(new Event('input')); // jalankan autofill yang sudah ada
+  };
+
+  const fail = (err) => {
+    if (window._qrScanner === scanner) {
+      closeModal();
+      toast('Tidak bisa membuka kamera: ' + (err?.message || err), 'error');
+    }
+  };
+
+  const startCam = (camId) => scanner.start(
+    camId,
+    {
+      fps: 10,
+      qrbox: (w, h) => { const s = Math.floor(Math.min(w, h) * 0.7); return { width: s, height: s }; }
+    },
+    onScan,
+    () => {} // frame tanpa QR, abaikan
+  ).then(() => {
+    // Modal sudah ditutup sebelum kamera sempat nyala → matikan lagi
+    if (window._qrScanner !== scanner) scanner.stop().catch(() => {});
+  });
+
+  Html5Qrcode.getCameras().then(cams => {
+    if (window._qrScanner !== scanner) return;
+    if (!cams.length) throw new Error('Kamera tidak ditemukan');
+
+    // Tampilkan kamera belakang saja (kalau label-nya terbaca)
+    const back = cams.filter(c => /back|rear|belakang|environment/i.test(c.label));
+    const list = back.length ? back : cams;
+
+    // Pakai pilihan terakhir di HP ini; kalau belum ada, hindari ultrawide
+    let saved = null;
+    try { saved = localStorage.getItem('wmsQrCam'); } catch (e) {}
+    const chosen = list.find(c => c.id === saved)
+                || list.find(c => !/ultra/i.test(c.label))
+                || list[0];
+
+    const sel = q('#qrCamSelect');
+    sel.innerHTML = list.map((c, i) =>
+      `<option value="${escHtml(c.id)}">${escHtml(c.label || 'Kamera ' + (i + 1))}</option>`
+    ).join('');
+    sel.value = chosen.id;
+
+    sel.onchange = () => {
+      try { localStorage.setItem('wmsQrCam', sel.value); } catch (e) {}
+      sel.disabled = true;
+      const stop = scanner.isScanning ? scanner.stop() : Promise.resolve();
+      stop.then(() => startCam(sel.value))
+          .then(() => { sel.disabled = false; })
+          .catch(fail);
+    };
+
+    return startCam(chosen.id).then(() => { sel.disabled = false; });
+  }).catch(fail);
+}
+
+function stopQrScanner() {
+  const s = window._qrScanner;
+  window._qrScanner = null;
+  if (s && s.isScanning) s.stop().catch(() => {});
 }
 
 function openBinPopup(targetEl) {

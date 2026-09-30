@@ -8,7 +8,7 @@ sessionStart();
 $isAuth  = isLoggedIn();
 $user    = $isAuth ? currentUser() : null;
 $csrf    = csrfGenerate();
-$allowed = $isAuth ? (ROLE_ACCESS[$user['role']] ?? []) : [];
+$allowed = $isAuth ? array_values(array_filter(ROLE_ACCESS[$user['role']] ?? [], 'canAccess')) : [];
 ?>
 <!DOCTYPE html>
 <html lang="id" data-auth="<?= $isAuth ? 'true' : 'false' ?>">
@@ -250,6 +250,7 @@ window.WMS = {
   vendorName: <?= $isAuth && $user['vendor_code'] ? json_encode(getVendorName($user['vendor_code'])) : 'null' ?>
 };
 </script>
+<script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script src="assets/js/app.js"></script>
 </body>
 </html>
